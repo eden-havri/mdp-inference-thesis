@@ -1,0 +1,8 @@
+[project]
+name = "gocai_py"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["numpy", "torch", "pydantic", "matplotlib", "Pillow"]
+
+[project.scripts]
+gw = "gocai_py.gw:main"
