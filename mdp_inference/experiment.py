@@ -10,20 +10,28 @@ from typing import Any
 
 import numpy as np
 
-from .artifacts import load_grid_spec, software_environment
+from .artifacts import load_grid_spec, software_environment, source_tree_sha256
 from .baselines import (
+    CEMConfig,
     DiscreteSACConfig,
+    DoubleQConfig,
     PPOConfig,
     ReinforceConfig,
+    train_cem,
     train_discrete_sac,
+    train_double_q,
     train_ppo,
     train_reinforce,
 )
-from .gridworld import gridworld_mdp
+from .gridworld import gridworld_mdp, state_of
 from .mdp import TapeBank
 from .oracles import (
+    evaluate_deterministic_policy_goal_probability,
+    evaluate_nonstationary_deterministic_policy_goal_probability,
+    evaluate_stationary_stochastic_policy_goal_probability,
     evaluate_stationary_stochastic_policy,
     finite_horizon_optimal_control,
+    finite_horizon_optimal_goal_reaching_control,
     uniform_random_policy_value,
 )
 from .policy import DirectELBOTrainConfig, train_direct_elbo
@@ -32,6 +40,10 @@ from .policy_mcmc import (
     PolicyMHConfig,
     autocorrelation_effective_sample_size,
     run_single_site_policy_mh,
+)
+from .policy_tempering import (
+    PolicyTemperingConfig,
+    run_replica_exchange_policy_mh,
 )
 from .replicated_smc import ReplicatedSMCConfig, run_replicated_policy_smc
 
@@ -61,6 +73,10 @@ class ExperimentConfig:
     mcmc_burn_in: int = 1_000
     mcmc_thinning: int = 4
     mcmc_tapes: int = 0
+    mcmc_temperatures: int = 8
+    mcmc_ladder_power: float = 2.0
+    mcmc_swap_interval: int = 1
+    mcmc_guide_strength: float = 0.5
 
     @classmethod
     def from_json(cls, path: Path) -> "ExperimentConfig":
@@ -69,8 +85,16 @@ class ExperimentConfig:
 
 def _git_revision() -> dict[str, Any]:
     try:
-        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip())
+        revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        dirty = bool(
+            subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        )
         return {"revision": revision, "dirty": dirty}
     except (OSError, subprocess.CalledProcessError):
         return {"revision": None, "dirty": None}
@@ -86,6 +110,36 @@ def _complete_probability_matrix(mdp, decision_probabilities: np.ndarray) -> np.
 def _committed_policy_value(mdp, policies: np.ndarray) -> tuple[float, float]:
     values = np.asarray([mdp.expected_return(policy) for policy in policies], dtype=np.float64)
     return float(values.mean()), float(values.std(ddof=1) if len(values) > 1 else 0.0)
+
+
+def _committed_policy_goal_probability(
+    mdp,
+    policies: np.ndarray,
+    goal_states: tuple[int, ...],
+    weights: np.ndarray | None = None,
+) -> tuple[float, float]:
+    """Exact environment-success moments over committed deterministic policies."""
+
+    policies = np.asarray(policies, dtype=np.int64)
+    if policies.ndim != 2 or policies.shape[1] != mdp.num_states or len(policies) == 0:
+        raise ValueError("committed policies must have nonempty shape [N, S]")
+    unique_policies, inverse = np.unique(policies, axis=0, return_inverse=True)
+    unique_values = np.asarray(
+        [
+            evaluate_deterministic_policy_goal_probability(mdp, policy, goal_states)
+            for policy in unique_policies
+        ],
+        dtype=np.float64,
+    )
+    values = unique_values[inverse]
+    if weights is None:
+        return float(values.mean()), float(values.std(ddof=1) if len(values) > 1 else 0.0)
+    weights = np.asarray(weights, dtype=np.float64)
+    if weights.shape != values.shape or np.any(weights < 0.0) or not np.isclose(weights.sum(), 1.0):
+        raise ValueError("committed-policy weights must be nonnegative and sum to one")
+    mean = float(np.dot(weights, values))
+    variance = float(np.dot(weights, (values - mean) ** 2))
+    return mean, float(np.sqrt(max(variance, 0.0)))
 
 
 def _map_policy_value(mdp, probabilities: np.ndarray) -> float:
@@ -115,11 +169,14 @@ def run_experiment(config: ExperimentConfig) -> Path:
         "ppo_warmstart_elbo",
         "ppo_policy_bank",
         "ppo_policy_mh",
+        "ppo_policy_tempering",
         "replicated_smc",
         "ppo_guided_smc",
         "reinforce",
         "ppo",
         "sac",
+        "cem",
+        "double_q",
     }
     if config.method not in allowed_methods:
         raise ValueError(f"unknown method {config.method!r}")
@@ -135,9 +192,14 @@ def run_experiment(config: ExperimentConfig) -> Path:
         raise ValueError("invalid policy-MCMC iteration, thinning, or tape count")
     if not 0 <= config.mcmc_burn_in < config.mcmc_iterations:
         raise ValueError("mcmc_burn_in must lie in [0, mcmc_iterations)")
+    if config.mcmc_temperatures < 2 or config.mcmc_ladder_power <= 0.0:
+        raise ValueError("invalid policy-tempering ladder")
+    if config.mcmc_swap_interval <= 0 or not 0.0 <= config.mcmc_guide_strength < 1.0:
+        raise ValueError("invalid policy-tempering swap interval or guide strength")
     map_path = Path(config.map_path).resolve()
     spec, map_hash = load_grid_spec(map_path)
     mdp = gridworld_mdp(spec)
+    goal_states = tuple(state_of(spec, cell) for cell in spec.goals)
     final_dir = Path(config.output_root).resolve() / config.run_id
     if (final_dir / "DONE").exists():
         return final_dir
@@ -157,16 +219,22 @@ def run_experiment(config: ExperimentConfig) -> Path:
         "slurm_job_id": os.getenv("SLURM_JOB_ID"),
         "slurm_array_task_id": os.getenv("SLURM_ARRAY_TASK_ID"),
     }
+    source_hash, source_file_count = source_tree_sha256(Path(__file__).resolve().parents[1])
+    environment["source_snapshot_sha256"] = source_hash
+    environment["source_snapshot_file_count"] = source_file_count
     (work_dir / "environment.json").write_text(json.dumps(environment, indent=2) + "\n", encoding="utf-8")
     try:
         uniform_probabilities = np.full(
             (mdp.num_states, mdp.num_actions), 1.0 / mdp.num_actions, dtype=np.float64
         )
-        _, random_committed_mean, random_committed_std = _sample_committed_policies(
+        random_policies, random_committed_mean, random_committed_std = _sample_committed_policies(
             mdp,
             uniform_probabilities,
             config.evaluation_policy_samples,
             config.training_seed + 7_000_003,
+        )
+        random_goal_mean, random_goal_std = _committed_policy_goal_probability(
+            mdp, random_policies, goal_states
         )
         result: dict[str, Any] = {
             "method": config.method,
@@ -175,23 +243,39 @@ def run_experiment(config: ExperimentConfig) -> Path:
             "random_committed_value_std": random_committed_std,
             "random_committed_value_se": random_committed_std
             / np.sqrt(config.evaluation_policy_samples),
+            "random_marginal_goal_probability": (
+                evaluate_stationary_stochastic_policy_goal_probability(
+                    mdp, uniform_probabilities, goal_states
+                )
+            ),
+            "random_committed_goal_probability": random_goal_mean,
+            "random_committed_goal_probability_std": random_goal_std,
+            "random_committed_goal_probability_se": random_goal_std
+            / np.sqrt(config.evaluation_policy_samples),
             "transition_budget": config.transition_budget,
             "transition_budget_semantics": "minimum_counted_training_transitions",
             "evaluation_policy_samples": config.evaluation_policy_samples,
             "transition_model_kind": mdp.transition_model_kind,
             "transition_storage_bytes": mdp.transition_storage_bytes,
             "ppo_count_bonus": config.ppo_count_bonus,
+            "goal_probability_event": "hit_any_goal_at_or_before_horizon",
+            "goal_probability_horizon": mdp.horizon,
         }
         history: list[dict[str, float]] = []
         policy_probabilities_artifact: np.ndarray | None = None
         policy_particles_artifact: np.ndarray | None = None
         policy_weights_artifact: np.ndarray | None = None
+        primary_committed_policies: np.ndarray | None = None
+        primary_committed_weights: np.ndarray | None = None
         if config.method == "random":
-            result["value"] = result["random_marginal_value"]
+            result["value"] = result["random_committed_value"]
             result["marginal_action_value"] = result["random_marginal_value"]
             result["committed_policy_value"] = result["random_committed_value"]
+            result["committed_policy_value_std"] = result["random_committed_value_std"]
+            result["committed_policy_value_se"] = result["random_committed_value_se"]
             result["simulator_steps"] = 0
             policy_probabilities_artifact = uniform_probabilities
+            primary_committed_policies = random_policies
         elif config.method == "oracle":
             oracle = finite_horizon_optimal_control(mdp)
             result["value"] = oracle.initial_value
@@ -219,6 +303,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 config.evaluation_policy_samples, torch_generator
             )
             sampled_policies = distribution.full_policies(sampled_decisions)
+            primary_committed_policies = sampled_policies
             committed_mean, committed_std = _committed_policy_value(mdp, sampled_policies)
             result["committed_policy_value"] = committed_mean
             result["committed_policy_value_std"] = committed_std
@@ -263,6 +348,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 )
                 policy_probabilities_artifact = smc.marginal_action_probabilities(mdp)
                 policy_particles_artifact = smc.policies
+                primary_committed_policies = smc.policies
                 result["map_policy_value"] = _map_policy_value(
                     mdp, policy_probabilities_artifact
                 )
@@ -341,6 +427,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
             )
             policy_probabilities_artifact = smc.marginal_action_probabilities(mdp)
             policy_particles_artifact = smc.policies
+            primary_committed_policies = smc.policies
             result["map_policy_value"] = _map_policy_value(mdp, policy_probabilities_artifact)
         elif config.method == "ppo_warmstart_elbo":
             warm_start_budget = max(1, int(config.transition_budget * config.warm_start_fraction))
@@ -409,6 +496,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 config.evaluation_policy_samples, torch_generator
             )
             sampled_policies = distribution.full_policies(sampled_decisions)
+            primary_committed_policies = sampled_policies
             committed_mean, committed_std = _committed_policy_value(mdp, sampled_policies)
             total_training_steps = warm_start.transitions + int(
                 refinement_history[-1]["simulator_steps"]
@@ -518,6 +606,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
             policy_probabilities_artifact = bank_probabilities
             policy_particles_artifact = bank.policies
             policy_weights_artifact = bank.probabilities
+            primary_committed_policies = bank.policies
+            primary_committed_weights = bank.probabilities
         elif config.method == "ppo_policy_mh":
             proposal = train_ppo(
                 mdp,
@@ -608,6 +698,104 @@ def run_experiment(config: ExperimentConfig) -> Path:
             )
             policy_probabilities_artifact = chain_probabilities
             policy_particles_artifact = chain.policies
+            primary_committed_policies = chain.policies
+        elif config.method == "ppo_policy_tempering":
+            proposal = train_ppo(
+                mdp,
+                PPOConfig(
+                    transition_budget=config.transition_budget,
+                    learning_rate=config.learning_rate,
+                    count_bonus_coefficient=config.ppo_count_bonus,
+                    seed=config.training_seed,
+                ),
+            )
+            history = proposal.history
+            initial_policy = np.argmax(proposal.action_probabilities, axis=1).astype(np.int64)
+            mcmc_tapes = (
+                None
+                if config.mcmc_tapes == 0
+                else TapeBank.sample(
+                    config.mcmc_tapes,
+                    mdp.horizon,
+                    config.training_seed + 5_000_003,
+                )
+            )
+            mcmc_started = time.time()
+            chain = run_replica_exchange_policy_mh(
+                mdp,
+                initial_policy,
+                PolicyTemperingConfig(
+                    beta=config.beta,
+                    num_temperatures=config.mcmc_temperatures,
+                    ladder_power=config.mcmc_ladder_power,
+                    iterations=config.mcmc_iterations,
+                    burn_in=config.mcmc_burn_in,
+                    thinning=config.mcmc_thinning,
+                    swap_interval=config.mcmc_swap_interval,
+                    guide_strength=config.mcmc_guide_strength,
+                    seed=config.training_seed + 6_000_003,
+                ),
+                tapes=mcmc_tapes,
+                guide_probabilities=proposal.action_probabilities,
+            )
+            mcmc_elapsed = time.time() - mcmc_started
+            chain_probabilities = chain.marginal_action_probabilities(mdp)
+            committed_mean, committed_std = _committed_policy_value(mdp, chain.policies)
+            exact_chain_values = np.asarray(
+                [mdp.expected_return(policy) for policy in chain.policies], dtype=np.float64
+            )
+            exact_return_ess = autocorrelation_effective_sample_size(exact_chain_values)
+            _, proposal_committed_mean, proposal_committed_std = _sample_committed_policies(
+                mdp,
+                proposal.action_probabilities,
+                config.evaluation_policy_samples,
+                config.training_seed + 8_000_003,
+            )
+            result.update(
+                {
+                    "value": committed_mean,
+                    "marginal_action_value": evaluate_stationary_stochastic_policy(
+                        mdp, chain_probabilities
+                    ),
+                    "committed_policy_value": committed_mean,
+                    "committed_policy_value_std": committed_std,
+                    "committed_policy_value_se": committed_std / np.sqrt(exact_return_ess),
+                    "map_policy_value": float(exact_chain_values.max()),
+                    "marginal_map_policy_value": _map_policy_value(
+                        mdp, chain_probabilities
+                    ),
+                    "proposal_marginal_action_value": evaluate_stationary_stochastic_policy(
+                        mdp, proposal.action_probabilities
+                    ),
+                    "proposal_committed_policy_value": proposal_committed_mean,
+                    "proposal_committed_policy_value_std": proposal_committed_std,
+                    "proposal_map_policy_value": _map_policy_value(
+                        mdp, proposal.action_probabilities
+                    ),
+                    "mcmc_target": "exact_expected_return"
+                    if mcmc_tapes is None
+                    else "fixed_tape_sample_average",
+                    "mcmc_tapes": config.mcmc_tapes,
+                    "mcmc_iterations": config.mcmc_iterations,
+                    "mcmc_burn_in": config.mcmc_burn_in,
+                    "mcmc_thinning": config.mcmc_thinning,
+                    "mcmc_samples": int(len(chain.policies)),
+                    "mcmc_temperatures": config.mcmc_temperatures,
+                    "mcmc_beta_ladder": chain.betas.tolist(),
+                    "mcmc_local_acceptance_rates": chain.local_acceptance_rates.tolist(),
+                    "mcmc_swap_acceptance_rates": chain.swap_acceptance_rates.tolist(),
+                    "mcmc_target_return_ess": chain.return_effective_sample_size,
+                    "mcmc_exact_return_ess": exact_return_ess,
+                    "mcmc_value_evaluations": chain.value_evaluations,
+                    "mcmc_simulator_steps": chain.simulator_steps,
+                    "mcmc_elapsed_seconds": mcmc_elapsed,
+                    "training_simulator_steps": proposal.transitions,
+                    "simulator_steps": proposal.transitions + chain.simulator_steps,
+                }
+            )
+            policy_probabilities_artifact = chain_probabilities
+            policy_particles_artifact = chain.policies
+            primary_committed_policies = chain.policies
         else:
             if config.method == "reinforce":
                 trained = train_reinforce(
@@ -628,7 +816,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         seed=config.training_seed,
                     ),
                 )
-            else:
+            elif config.method == "sac":
                 trained = train_discrete_sac(
                     mdp,
                     DiscreteSACConfig(
@@ -637,15 +825,37 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         seed=config.training_seed,
                     ),
                 )
+            elif config.method == "cem":
+                trained = train_cem(
+                    mdp,
+                    CEMConfig(
+                        transition_budget=config.transition_budget,
+                        seed=config.training_seed,
+                    ),
+                )
+            elif config.method == "double_q":
+                trained = train_double_q(
+                    mdp,
+                    DoubleQConfig(
+                        transition_budget=config.transition_budget,
+                        learning_rate=config.learning_rate,
+                        seed=config.training_seed,
+                    ),
+                )
+            else:
+                raise AssertionError(f"unhandled learned method {config.method!r}")
             history = trained.history
-            result["value"] = evaluate_stationary_stochastic_policy(mdp, trained.action_probabilities)
-            result["marginal_action_value"] = result["value"]
-            _, committed_mean, committed_std = _sample_committed_policies(
+            result["marginal_action_value"] = evaluate_stationary_stochastic_policy(
+                mdp, trained.action_probabilities
+            )
+            sampled_policies, committed_mean, committed_std = _sample_committed_policies(
                 mdp,
                 trained.action_probabilities,
                 config.evaluation_policy_samples,
                 config.training_seed + 8_000_003,
             )
+            primary_committed_policies = sampled_policies
+            result["value"] = committed_mean
             result["committed_policy_value"] = committed_mean
             result["committed_policy_value_std"] = committed_std
             result["committed_policy_value_se"] = committed_std / np.sqrt(
@@ -657,7 +867,52 @@ def run_experiment(config: ExperimentConfig) -> Path:
 
         if not np.isfinite(float(result["value"])):
             raise FloatingPointError("experiment produced a non-finite value")
-        result["oracle_value"] = finite_horizon_optimal_control(mdp).initial_value
+        return_oracle = finite_horizon_optimal_control(mdp)
+        goal_oracle = finite_horizon_optimal_goal_reaching_control(mdp, goal_states)
+        result["oracle_value"] = return_oracle.initial_value
+        result["oracle_goal_probability"] = goal_oracle.initial_value
+        if policy_probabilities_artifact is not None:
+            result["marginal_action_goal_probability"] = (
+                evaluate_stationary_stochastic_policy_goal_probability(
+                    mdp, policy_probabilities_artifact, goal_states
+                )
+            )
+            result["map_policy_goal_probability"] = (
+                evaluate_deterministic_policy_goal_probability(
+                    mdp,
+                    np.argmax(policy_probabilities_artifact, axis=1).astype(np.int64),
+                    goal_states,
+                )
+            )
+        if primary_committed_policies is not None:
+            committed_goal_mean, committed_goal_std = _committed_policy_goal_probability(
+                mdp,
+                primary_committed_policies,
+                goal_states,
+                primary_committed_weights,
+            )
+            result["committed_policy_goal_probability"] = committed_goal_mean
+            result["committed_policy_goal_probability_std"] = committed_goal_std
+
+        if config.method == "oracle":
+            result["goal_reaching_probability"] = (
+                evaluate_nonstationary_deterministic_policy_goal_probability(
+                    mdp, return_oracle.policy, goal_states
+                )
+            )
+            result["goal_reaching_probability_semantics"] = (
+                "return_optimal_nonstationary_deterministic_policy"
+            )
+        else:
+            result["goal_reaching_probability"] = result[
+                "committed_policy_goal_probability"
+            ]
+            result["goal_reaching_probability_semantics"] = "policy_sample_then_commit"
+        result["primary_value_semantics"] = (
+            "return_optimal_nonstationary_deterministic_policy"
+            if config.method == "oracle"
+            else "policy_sample_then_commit"
+        )
         result["elapsed_seconds"] = time.time() - started
         if policy_probabilities_artifact is not None:
             policy_path = work_dir / "policy_probabilities.npy"

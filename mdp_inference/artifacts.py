@@ -23,6 +23,28 @@ def sha256_json(value: Any) -> str:
     return hashlib.sha256(stable_json_bytes(value)).hexdigest()
 
 
+def source_tree_sha256(root: Path) -> tuple[str, int]:
+    """Hash the executable Python snapshot even when Git metadata is absent."""
+
+    root = root.resolve()
+    candidates = [root / "pyproject.toml"]
+    for package in ("mdp_inference", "gocai"):
+        candidates.extend((root / package).rglob("*.py"))
+    files = sorted(
+        (path for path in candidates if path.is_file()),
+        key=lambda path: path.relative_to(root).as_posix(),
+    )
+    digest = hashlib.sha256()
+    for path in files:
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        content = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest(), len(files)
+
+
 def grid_spec_to_dict(spec: GridWorldSpec) -> dict[str, Any]:
     value = asdict(spec)
     for key in ("start",):

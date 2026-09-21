@@ -12,5 +12,9 @@ mdpi = "mdp_inference.cli:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["gocai*", "mdp_inference*"]
+exclude = ["experiments*", "slurm*", "tests*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

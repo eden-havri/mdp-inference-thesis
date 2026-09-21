@@ -1,0 +1,2 @@
+{"clip_fraction": 0.0, "mean_episode_return": -1.1875000000000002, "policy_loss": 0.25724345471697174, "transitions": 535.0, "update": 0.0, "value_loss": 3.6862625030348015, "visited_states": 0.0}
+{"clip_fraction": 0.0, "mean_episode_return": -0.682608695652174, "policy_loss": -0.07042370820266505, "transitions": 1042.0, "update": 1.0, "value_loss": 5.7377022596018, "visited_states": 0.0}

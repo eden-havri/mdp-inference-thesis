@@ -334,3 +334,322 @@ def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> Base
         if not torch.isfinite(actor_logits).all() or not torch.isfinite(q1).all() or not torch.isfinite(q2).all():
             raise FloatingPointError("non-finite parameter in discrete SAC")
     return BaselineResult(_full_policy_probabilities(actor_logits), transitions, history)
+
+
+@dataclass(frozen=True)
+class CEMConfig:
+    """Configuration for categorical cross-entropy policy search."""
+
+    transition_budget: int = 20_000
+    population_size: int = 64
+    elite_fraction: float = 0.2
+    rollouts_per_policy: int = 4
+    smoothing: float = 0.7
+    min_action_probability: float = 0.0
+    seed: int = 0
+
+
+def _validate_cem_config(mdp: FiniteHorizonMDP, config: CEMConfig) -> None:
+    if config.transition_budget <= 0:
+        raise ValueError("transition_budget must be positive")
+    if config.population_size < 2:
+        raise ValueError("population_size must be at least two")
+    if not 0.0 < config.elite_fraction <= 1.0:
+        raise ValueError("elite_fraction must lie in (0, 1]")
+    if config.rollouts_per_policy <= 0:
+        raise ValueError("rollouts_per_policy must be positive")
+    if not 0.0 < config.smoothing <= 1.0:
+        raise ValueError("smoothing must lie in (0, 1]")
+    if not 0.0 <= config.min_action_probability < 1.0 / mdp.num_actions:
+        raise ValueError("min_action_probability must lie in [0, 1 / num_actions)")
+
+
+def _cem_elite_update(
+    probabilities: np.ndarray,
+    elite_decisions: np.ndarray,
+    smoothing: float,
+    min_action_probability: float,
+) -> np.ndarray:
+    num_actions = probabilities.shape[1]
+    frequencies = np.stack(
+        [np.mean(elite_decisions == action, axis=0) for action in range(num_actions)],
+        axis=1,
+    )
+    updated = (1.0 - smoothing) * probabilities + smoothing * frequencies
+    if min_action_probability > 0.0:
+        residual = 1.0 - num_actions * min_action_probability
+        updated = min_action_probability + residual * updated
+    return updated / updated.sum(axis=1, keepdims=True)
+
+
+def _deterministic_action_probabilities(
+    mdp: FiniteHorizonMDP,
+    policy: np.ndarray,
+) -> np.ndarray:
+    probabilities = np.full(
+        (mdp.num_states, mdp.num_actions),
+        1.0 / mdp.num_actions,
+        dtype=np.float64,
+    )
+    for state in mdp.decision_states or ():
+        probabilities[state] = 0.0
+        probabilities[state, int(policy[state])] = 1.0
+    return probabilities
+
+
+def train_cem(mdp: FiniteHorizonMDP, config: CEMConfig) -> BaselineResult:
+    """Search for a deterministic stationary policy with tabular CEM.
+
+    Each complete generation samples policies from an independent categorical
+    distribution over decision states and updates that distribution from the
+    highest-return elite policies.  An incomplete final generation is not used
+    for an update, but every simulator transition it consumed is still counted.
+    The returned policy is the best completely evaluated policy encountered.
+    """
+
+    _validate_cem_config(mdp, config)
+    rng = np.random.default_rng(config.seed)
+    probabilities = np.full(
+        (mdp.num_decisions, mdp.num_actions),
+        1.0 / mdp.num_actions,
+        dtype=np.float64,
+    )
+    transitions = 0
+    generation = 0
+    history: list[dict[str, float]] = []
+    best_policy: np.ndarray | None = None
+    best_score = -np.inf
+
+    while transitions < config.transition_budget:
+        generation_start = transitions
+        candidate_decisions: list[np.ndarray] = []
+        candidate_scores: list[float] = []
+
+        for _ in range(config.population_size):
+            decisions = np.asarray(
+                [
+                    rng.choice(mdp.num_actions, p=probabilities[decision])
+                    for decision in range(mdp.num_decisions)
+                ],
+                dtype=np.int64,
+            )
+            policy = mdp.policy_from_decisions(decisions)
+            rollout_returns: list[float] = []
+            for _ in range(config.rollouts_per_policy):
+                returns, steps = mdp.sample_rollouts_with_steps(policy, 1, rng)
+                transitions += steps
+                rollout_returns.append(float(returns[0]))
+                if transitions >= config.transition_budget:
+                    break
+
+            if len(rollout_returns) == config.rollouts_per_policy:
+                score = float(np.mean(rollout_returns))
+                candidate_decisions.append(decisions)
+                candidate_scores.append(score)
+                if score > best_score:
+                    best_score = score
+                    best_policy = policy.copy()
+            if transitions >= config.transition_budget:
+                break
+
+        completed_population = len(candidate_scores)
+        updated = completed_population == config.population_size
+        elite_mean = 0.0
+        if updated:
+            score_array = np.asarray(candidate_scores, dtype=np.float64)
+            elite_count = max(1, int(np.ceil(config.elite_fraction * config.population_size)))
+            elite_indices = np.argsort(score_array, kind="stable")[-elite_count:]
+            elite_decisions = np.asarray(candidate_decisions, dtype=np.int64)[elite_indices]
+            probabilities = _cem_elite_update(
+                probabilities,
+                elite_decisions,
+                config.smoothing,
+                config.min_action_probability,
+            )
+            elite_mean = float(score_array[elite_indices].mean())
+
+        if completed_population:
+            score_array = np.asarray(candidate_scores, dtype=np.float64)
+            mean_score = float(score_array.mean())
+            generation_best = float(score_array.max())
+        else:
+            mean_score = 0.0
+            generation_best = best_score if np.isfinite(best_score) else 0.0
+        entropy = -np.sum(probabilities * np.log(np.clip(probabilities, 1e-300, 1.0)))
+        history.append(
+            {
+                "generation": float(generation),
+                "transitions": float(transitions),
+                "completed_population": float(completed_population),
+                "updated": float(updated),
+                "mean_policy_return": mean_score,
+                "best_policy_return": generation_best,
+                "elite_mean_return": elite_mean,
+                "sampling_entropy": float(entropy),
+            }
+        )
+        if transitions == generation_start:
+            raise RuntimeError("CEM collected no transitions")
+        generation += 1
+
+    if best_policy is None:
+        mode_decisions = np.argmax(probabilities, axis=1)
+        best_policy = mdp.policy_from_decisions(mode_decisions)
+    return BaselineResult(
+        _deterministic_action_probabilities(mdp, best_policy),
+        transitions,
+        history,
+    )
+
+
+@dataclass(frozen=True)
+class DoubleQConfig:
+    """Configuration for online tabular Double Q-learning."""
+
+    transition_budget: int = 20_000
+    learning_rate: float = 0.1
+    initial_epsilon: float = 1.0
+    final_epsilon: float = 0.05
+    exploration_fraction: float = 0.5
+    seed: int = 0
+    log_every: int = 1_000
+
+
+def _validate_double_q_config(config: DoubleQConfig) -> None:
+    if config.transition_budget <= 0:
+        raise ValueError("transition_budget must be positive")
+    if not 0.0 < config.learning_rate <= 1.0:
+        raise ValueError("learning_rate must lie in (0, 1]")
+    if not 0.0 <= config.final_epsilon <= config.initial_epsilon <= 1.0:
+        raise ValueError("epsilon values must satisfy 0 <= final <= initial <= 1")
+    if not 0.0 < config.exploration_fraction <= 1.0:
+        raise ValueError("exploration_fraction must lie in (0, 1]")
+    if config.log_every <= 0:
+        raise ValueError("log_every must be positive")
+
+
+def _random_argmax(values: np.ndarray, rng: np.random.Generator) -> int:
+    maximizers = np.flatnonzero(values == np.max(values))
+    return int(rng.choice(maximizers))
+
+
+def _double_q_td_target(
+    selection_q: np.ndarray,
+    evaluation_q: np.ndarray,
+    next_state: int,
+    reward: float,
+    done: bool,
+    gamma: float,
+    rng: np.random.Generator,
+) -> float:
+    if done:
+        return float(reward)
+    next_action = _random_argmax(selection_q[next_state], rng)
+    return float(reward + gamma * evaluation_q[next_state, next_action])
+
+
+def _epsilon_at_transition(config: DoubleQConfig, transitions: int) -> float:
+    anneal_steps = max(1, int(np.ceil(config.exploration_fraction * config.transition_budget)))
+    fraction = min(1.0, transitions / float(anneal_steps))
+    return float(
+        config.initial_epsilon
+        + fraction * (config.final_epsilon - config.initial_epsilon)
+    )
+
+
+def _greedy_q_probabilities(q_values: np.ndarray) -> np.ndarray:
+    maxima = np.max(q_values, axis=1, keepdims=True)
+    maximizers = q_values == maxima
+    return maximizers / maximizers.sum(axis=1, keepdims=True)
+
+
+def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResult:
+    """Train a stationary policy with online tabular Double Q-learning."""
+
+    _validate_double_q_config(config)
+    if float(mdp.initial[~mdp.terminal].sum()) <= 0.0:
+        raise RuntimeError("Double Q-learning cannot collect nonterminal transitions")
+    rng = np.random.default_rng(config.seed)
+    q1 = np.zeros((mdp.num_states, mdp.num_actions), dtype=np.float64)
+    q2 = np.zeros_like(q1)
+    transitions = 0
+    history: list[dict[str, float]] = []
+    completed_returns: deque[float] = deque(maxlen=100)
+    last_td_error = 0.0
+    last_epsilon = config.initial_epsilon
+
+    while transitions < config.transition_budget:
+        state = mdp.sample_initial(float(rng.random()))
+        if mdp.terminal[state]:
+            continue
+        episode_return = 0.0
+        discount = 1.0
+        for time in range(mdp.horizon):
+            epsilon = _epsilon_at_transition(config, transitions)
+            if rng.random() < epsilon:
+                action = int(rng.integers(mdp.num_actions))
+            else:
+                action = _random_argmax(q1[state] + q2[state], rng)
+            next_state, reward = mdp.sample_transition(state, action, float(rng.random()))
+            done = bool(mdp.terminal[next_state] or time == mdp.horizon - 1)
+
+            if rng.random() < 0.5:
+                target = _double_q_td_target(
+                    q1,
+                    q2,
+                    next_state,
+                    reward,
+                    done,
+                    mdp.gamma,
+                    rng,
+                )
+                last_td_error = target - q1[state, action]
+                q1[state, action] += config.learning_rate * last_td_error
+            else:
+                target = _double_q_td_target(
+                    q2,
+                    q1,
+                    next_state,
+                    reward,
+                    done,
+                    mdp.gamma,
+                    rng,
+                )
+                last_td_error = target - q2[state, action]
+                q2[state, action] += config.learning_rate * last_td_error
+
+            episode_return += discount * reward
+            discount *= mdp.gamma
+            transitions += 1
+            last_epsilon = epsilon
+            state = next_state
+            if done:
+                completed_returns.append(float(episode_return))
+            if transitions % config.log_every == 0:
+                history.append(
+                    {
+                        "transitions": float(transitions),
+                        "mean_episode_return_100": float(np.mean(completed_returns))
+                        if completed_returns
+                        else 0.0,
+                        "epsilon": epsilon,
+                        "td_error": float(last_td_error),
+                    }
+                )
+            if done or transitions >= config.transition_budget:
+                break
+
+    if not history or history[-1]["transitions"] != float(transitions):
+        history.append(
+            {
+                "transitions": float(transitions),
+                "mean_episode_return_100": float(np.mean(completed_returns))
+                if completed_returns
+                else 0.0,
+                "epsilon": float(last_epsilon),
+                "td_error": float(last_td_error),
+            }
+        )
+    if not np.isfinite(q1).all() or not np.isfinite(q2).all():
+        raise FloatingPointError("non-finite value in Double Q-learning")
+    return BaselineResult(_greedy_q_probabilities(q1 + q2), transitions, history)

@@ -1,0 +1,22 @@
+\contentsline {chapter}{Abstract}{i}{chapter*.1}%
+\contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}%
+\contentsline {chapter}{\numberline {2}Problem Setting and Notation}{2}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Finite-horizon stochastic control}{2}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Policy-level randomness}{2}{section.2.2}%
+\contentsline {chapter}{\numberline {3}Expected-Return Policy Target}{3}{chapter.3}%
+\contentsline {chapter}{\numberline {4}Exact Validation Framework}{4}{chapter.4}%
+\contentsline {chapter}{\numberline {5}Corrected Inference Method}{5}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Direct stochastic variational objective}{5}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Policy representation and execution}{5}{section.5.2}%
+\contentsline {section}{\numberline {5.3}Role of common random numbers}{6}{section.5.3}%
+\contentsline {section}{\numberline {5.4}Replicated sample-average policy SMC}{6}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Learned full-support proposal}{6}{section.5.5}%
+\contentsline {section}{\numberline {5.6}Proposal accounting and isolation}{7}{section.5.6}%
+\contentsline {chapter}{\numberline {6}Experimental Design}{8}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Target-fidelity tests}{8}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Control and scaling tests}{8}{section.6.2}%
+\contentsline {chapter}{\numberline {7}Discussion and Limitations}{10}{chapter.7}%
+\contentsline {chapter}{\numberline {8}Conclusion}{11}{chapter.8}%
+\contentsline {chapter}{Core Derivations}{12}{appendix*.3}%
+\contentsline {paragraph}{Gibbs variational identity.}{12}{section*.4}%
+\contentsline {paragraph}{Why a rollout is valid in the direct objective.}{12}{section*.5}%
