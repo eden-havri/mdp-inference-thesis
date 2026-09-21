@@ -1,0 +1,18 @@
+{
+  "method": "replicated_smc",
+  "random_value": -1.3984189670480356,
+  "transition_budget": 100000,
+  "marginal_action_value": -0.8389168738254418,
+  "committed_policy_value": -2.2583764394057666,
+  "committed_policy_value_std": 2.8608799703500205,
+  "training_simulator_steps": 100427,
+  "value": 0.26373063680953723,
+  "smc_simulator_steps": 356113,
+  "simulator_steps": 456540,
+  "smc_log_normalizer": -1.7042174797440164,
+  "smc_min_ess": 154.42492398178578,
+  "smc_resampling_events": 3,
+  "smc_unique_roots": 540,
+  "oracle_value": 4.332131965268032,
+  "elapsed_seconds": 7.061784029006958
+}

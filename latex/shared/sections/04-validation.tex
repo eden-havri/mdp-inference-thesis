@@ -1,0 +1,25 @@
+\DocSection{Exact Validation Framework}
+\label{sec:validation}
+
+The method is validated first on finite MDPs for which every deterministic
+policy can be enumerated. For each policy \(\policy\), finite-horizon dynamic
+programming computes \(\ExpectedReturn_H(\policy)\). Log-sum-exp normalization
+then gives the exact partition function, policy probabilities, and action
+marginals in Equation~\eqref{eq:policy-target}.
+
+The smallest diagnostic contains two policies with equal expected return but
+different return variance. The target in Equation~\eqref{eq:policy-target}
+assigns them equal probability under a uniform reference measure. A method
+that instead uses the right-hand side of Equation~\eqref{eq:order-matters}
+prefers the variable policy. This is a deterministic pass-or-fail test of the
+order of operations.
+
+Further diagnostics test state revisitation, absorbing states, policy
+memoization, particle ancestry, common random numbers, and exact gradients.
+No cluster-scale experiment is run until:
+\begin{itemize}
+  \item transition kernels and rewards pass deterministic unit tests;
+  \item direct-objective gradients agree with exhaustive differentiation;
+  \item particle marginals agree with the exact finite-sample target; and
+  \item increasing the number of simulator tapes reduces expected target error.
+\end{itemize}

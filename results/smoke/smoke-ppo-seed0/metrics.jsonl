@@ -1,0 +1,10 @@
+{"clip_fraction": 0.0, "mean_episode_return": -1.1875000000000002, "policy_loss": -0.03776228999043157, "transitions": 512.0, "update": 0.0, "value_loss": 4.037084500122788}
+{"clip_fraction": 0.0, "mean_episode_return": -0.13600000000000015, "policy_loss": 0.018943133159081277, "transitions": 1024.0, "update": 1.0, "value_loss": 6.83297455857589}
+{"clip_fraction": 0.0, "mean_episode_return": -0.721739130434783, "policy_loss": 0.07292119354413333, "transitions": 1536.0, "update": 2.0, "value_loss": 5.015011045702769}
+{"clip_fraction": 0.0, "mean_episode_return": -0.1360000000000002, "policy_loss": -0.01910946326713049, "transitions": 2048.0, "update": 3.0, "value_loss": 6.241431299327259}
+{"clip_fraction": 0.0, "mean_episode_return": 1.0629629629629629, "policy_loss": -0.003702104634499194, "transitions": 2560.0, "update": 4.0, "value_loss": 8.461246689287938}
+{"clip_fraction": 0.0, "mean_episode_return": 0.29999999999999993, "policy_loss": -0.014558248779118599, "transitions": 3072.0, "update": 5.0, "value_loss": 6.6179732778720854}
+{"clip_fraction": 0.0, "mean_episode_return": 1.0111111111111113, "policy_loss": -0.09816465710911326, "transitions": 3584.0, "update": 6.0, "value_loss": 8.695737658104818}
+{"clip_fraction": 0.0, "mean_episode_return": 1.6482758620689655, "policy_loss": 0.04551858158998397, "transitions": 4096.0, "update": 7.0, "value_loss": 8.158404455125885}
+{"clip_fraction": 0.0, "mean_episode_return": 1.925, "policy_loss": -0.06050658384406789, "transitions": 4608.0, "update": 8.0, "value_loss": 9.041527131078281}
+{"clip_fraction": 0.0, "mean_episode_return": 3.239285714285714, "policy_loss": -0.07220391813543603, "transitions": 5000.0, "update": 9.0, "value_loss": 11.351600509792158}

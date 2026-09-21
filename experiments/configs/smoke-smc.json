@@ -1,0 +1,16 @@
+{
+  "run_id": "smoke-smc-seed0",
+  "method": "replicated_smc",
+  "map_path": "experiments/maps/smoke-seed0.json",
+  "output_root": "results/smoke",
+  "training_seed": 0,
+  "transition_budget": 5000,
+  "beta": 1.0,
+  "evaluation_policy_samples": 500,
+  "direct_policy_samples": 8,
+  "direct_rollouts_per_policy": 2,
+  "learning_rate": 0.03,
+  "smc_particles": 128,
+  "smc_tapes": 8,
+  "ess_threshold_ratio": 0.5
+}

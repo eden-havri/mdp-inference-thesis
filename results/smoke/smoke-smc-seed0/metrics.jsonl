@@ -1,0 +1,14 @@
+{"estimated_elbo": -2.400000000000002, "iteration": 0.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 384.0}
+{"estimated_elbo": -2.400000000000002, "iteration": 1.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 768.0}
+{"estimated_elbo": -2.400000000000002, "iteration": 2.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 1152.0}
+{"estimated_elbo": -2.400000000000002, "iteration": 3.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 1536.0}
+{"estimated_elbo": -2.0312500000000018, "iteration": 4.0, "learning_signal_std": 0.9756207959550688, "mean_return": -2.031250000000001, "simulator_steps": 1911.0}
+{"estimated_elbo": -2.400802634694103, "iteration": 5.0, "learning_signal_std": 0.05105772080785039, "mean_return": -2.400000000000001, "simulator_steps": 2295.0}
+{"estimated_elbo": -2.4552314124772736, "iteration": 6.0, "learning_signal_std": 0.06586452823227691, "mean_return": -2.400000000000001, "simulator_steps": 2679.0}
+{"estimated_elbo": -2.3928429890552905, "iteration": 7.0, "learning_signal_std": 0.1226774939195822, "mean_return": -2.400000000000001, "simulator_steps": 3063.0}
+{"estimated_elbo": -2.3577940467721006, "iteration": 8.0, "learning_signal_std": 0.18748725080960968, "mean_return": -2.400000000000001, "simulator_steps": 3447.0}
+{"estimated_elbo": -2.383342406824234, "iteration": 9.0, "learning_signal_std": 0.31832924910468324, "mean_return": -2.400000000000001, "simulator_steps": 3831.0}
+{"estimated_elbo": -2.405034707103909, "iteration": 10.0, "learning_signal_std": 0.18039139599352166, "mean_return": -2.400000000000001, "simulator_steps": 4215.0}
+{"estimated_elbo": -2.477772184900595, "iteration": 11.0, "learning_signal_std": 0.25392847982519834, "mean_return": -2.400000000000001, "simulator_steps": 4599.0}
+{"estimated_elbo": -2.3623047679874514, "iteration": 12.0, "learning_signal_std": 0.1741714979269049, "mean_return": -2.400000000000001, "simulator_steps": 4983.0}
+{"estimated_elbo": -2.5055663723208763, "iteration": 13.0, "learning_signal_std": 0.21089861957627215, "mean_return": -2.400000000000001, "simulator_steps": 5367.0}

@@ -1,0 +1,9 @@
+{
+  "method": "sac",
+  "random_value": -1.3984189670480356,
+  "transition_budget": 5000,
+  "value": 3.067174646887065,
+  "simulator_steps": 5000,
+  "oracle_value": 4.332131965268032,
+  "elapsed_seconds": 9.526479959487915
+}

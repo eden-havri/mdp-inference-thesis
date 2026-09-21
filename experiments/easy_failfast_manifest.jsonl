@@ -1,0 +1,1 @@
+{"run_id":"easy-map0-smc-seed0-b100k","method":"replicated_smc","map_path":"experiments/maps/easy-seed0.json","output_root":"results/easy-failfast","training_seed":0,"transition_budget":100000,"beta":2.0,"evaluation_policy_samples":300,"direct_policy_samples":32,"direct_rollouts_per_policy":2,"learning_rate":0.01,"smc_particles":1024,"smc_tapes":16}

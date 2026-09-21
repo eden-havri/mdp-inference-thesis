@@ -1,0 +1,48 @@
+{
+  "rows": 8,
+  "cols": 8,
+  "start": [
+    7,
+    0
+  ],
+  "goals": [
+    [
+      0,
+      7
+    ]
+  ],
+  "walls": [
+    [
+      0,
+      2
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      3,
+      3
+    ],
+    [
+      3,
+      6
+    ],
+    [
+      5,
+      5
+    ],
+    [
+      7,
+      3
+    ]
+  ],
+  "hazards": [],
+  "slip_probability": 0.1,
+  "horizon": 64,
+  "step_reward": -0.1,
+  "goal_reward": 5.0,
+  "hazard_reward": -5.0,
+  "gamma": 1.0,
+  "sha256": "68859e976cbe56b78f55cad3e4dcb453b4035e826edbf3896cfdc2776eb47968"
+}

@@ -1,0 +1,1 @@
+{"run_id":"medium-map0-ppo-policy-bank-seed0-beta16-b200k-k128","method":"ppo_policy_bank","map_path":"experiments/maps/medium-seed0.json","output_root":"results/medium-policy-bank-gate","training_seed":0,"transition_budget":200000,"beta":16.0,"evaluation_policy_samples":100,"learning_rate":0.01,"ppo_count_bonus":1.0,"bank_snapshot_interval":5,"bank_evaluation_tapes":128}

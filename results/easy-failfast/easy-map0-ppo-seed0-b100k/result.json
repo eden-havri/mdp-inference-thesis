@@ -1,0 +1,14 @@
+{
+  "method": "ppo",
+  "random_marginal_value": -6.047498492103883,
+  "random_committed_value": -6.391869322905004,
+  "random_committed_value_std": 0.0712681027126489,
+  "transition_budget": 100000,
+  "value": 3.405343395342917,
+  "marginal_action_value": 3.405343395342917,
+  "committed_policy_value": 3.038255175832323,
+  "committed_policy_value_std": 1.2257505326549454,
+  "simulator_steps": 100000,
+  "oracle_value": 3.4508998474238997,
+  "elapsed_seconds": 16.900155067443848
+}

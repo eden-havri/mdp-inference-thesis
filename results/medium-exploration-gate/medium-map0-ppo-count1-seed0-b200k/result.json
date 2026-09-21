@@ -1,0 +1,23 @@
+{
+  "method": "ppo",
+  "random_marginal_value": -15.992284360464124,
+  "random_committed_value": -15.999991601574518,
+  "random_committed_value_std": 7.100038512330262e-05,
+  "random_committed_value_se": 7.100038512330262e-06,
+  "transition_budget": 200000,
+  "transition_budget_semantics": "minimum_counted_training_transitions",
+  "evaluation_policy_samples": 100,
+  "transition_model_kind": "fixed_branch",
+  "transition_storage_bytes": 73728,
+  "ppo_count_bonus": 1.0,
+  "value": 0.8352446261976207,
+  "marginal_action_value": 0.8352446261976207,
+  "committed_policy_value": -0.9573031458322616,
+  "committed_policy_value_std": 3.7451517441188376,
+  "committed_policy_value_se": 0.37451517441188376,
+  "map_policy_value": 0.9992431302822347,
+  "simulator_steps": 200011,
+  "oracle_value": 1.182771427954541,
+  "elapsed_seconds": 32.45334506034851,
+  "policy_probabilities_artifact": "policy_probabilities.npy"
+}

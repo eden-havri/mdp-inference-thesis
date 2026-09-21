@@ -1,0 +1,28 @@
+\DocSection{Introduction}
+\label{sec:introduction}
+
+Planning in a stochastic environment requires two conceptually separate
+operations. First, a policy is evaluated by averaging its return over the
+environment's transition randomness. Second, a decision rule selects among
+policies. Conflating these operations changes the objective: exponentiating a
+single realized return before averaging is generally not equivalent to
+exponentiating the expected return.
+
+This manuscript develops a policy-inference formulation in which the target is
+defined before an approximation algorithm is chosen. The target assigns mass
+to complete deterministic policies according to expected return. Its modes are
+therefore expected-return maximizers, while a finite inverse temperature
+retains a distribution over alternatives. The corrected inference method uses
+rollouts only through estimators that are valid for that target.
+
+The study has four goals:
+\begin{enumerate}
+  \item specify the expected-return policy distribution and its assumptions;
+  \item construct exact diagnostic oracles that detect target substitution;
+  \item derive direct and particle estimators with a consistent execution rule; and
+  \item compare target fidelity, control performance, and computational cost
+        under matched experimental conditions.
+\end{enumerate}
+
+Agreement with exact enumeration establishes target correctness before any
+large-scale performance comparison is attempted.

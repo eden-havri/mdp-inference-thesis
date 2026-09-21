@@ -1,0 +1,5 @@
+{"actor_loss": -1.465292036296967, "mean_episode_return_100": 1.426984126984127, "q_loss": 0.1866617562326824, "replay_size": 1000.0, "transitions": 1000.0}
+{"actor_loss": -4.537621485977581, "mean_episode_return_100": 4.235, "q_loss": 0.2949251763724672, "replay_size": 2000.0, "transitions": 2000.0}
+{"actor_loss": -4.751565515711208, "mean_episode_return_100": 3.7910000000000004, "q_loss": 0.3186276847866797, "replay_size": 3000.0, "transitions": 3000.0}
+{"actor_loss": -4.78515260677875, "mean_episode_return_100": 3.129000000000001, "q_loss": 1.3421756947505186, "replay_size": 4000.0, "transitions": 4000.0}
+{"actor_loss": -4.762563540122036, "mean_episode_return_100": 2.785, "q_loss": 1.0314450127162267, "replay_size": 5000.0, "transitions": 5000.0}

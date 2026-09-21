@@ -1,0 +1,23 @@
+{
+  "method": "ppo_warmstart_elbo",
+  "random_marginal_value": -6.047498492103883,
+  "random_committed_value": -6.390855190161351,
+  "random_committed_value_std": 0.05970603512487561,
+  "transition_budget": 200000,
+  "value": 3.092696195279036,
+  "marginal_action_value": 3.4081893324903447,
+  "committed_policy_value": 3.092696195279036,
+  "committed_policy_value_std": 0.9621860906639721,
+  "map_policy_value": 3.43518147189123,
+  "warm_start_fraction": 0.5,
+  "warm_start_marginal_action_value": 3.4194693699181604,
+  "warm_start_committed_policy_value": 3.179522304591269,
+  "warm_start_committed_policy_value_std": 0.9228057589857375,
+  "warm_start_map_policy_value": 3.4384090694583342,
+  "warm_start_simulator_steps": 100000,
+  "refinement_simulator_steps": 100607,
+  "simulator_steps": 200607,
+  "oracle_value": 3.4508998474238997,
+  "elapsed_seconds": 26.21304225921631,
+  "policy_probabilities_artifact": "policy_probabilities.npy"
+}

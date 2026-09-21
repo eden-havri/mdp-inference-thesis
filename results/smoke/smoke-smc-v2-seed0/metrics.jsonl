@@ -1,0 +1,14 @@
+{"estimated_elbo": -2.400000000000001, "iteration": 0.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 384.0}
+{"estimated_elbo": -2.400000000000001, "iteration": 1.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 768.0}
+{"estimated_elbo": -2.400000000000001, "iteration": 2.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 1152.0}
+{"estimated_elbo": -2.400000000000001, "iteration": 3.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 1536.0}
+{"estimated_elbo": -2.031250000000001, "iteration": 4.0, "learning_signal_std": 0.975620795955068, "mean_return": -2.031250000000001, "simulator_steps": 1911.0}
+{"estimated_elbo": -2.400798706501322, "iteration": 5.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 2295.0}
+{"estimated_elbo": -2.4026358010306006, "iteration": 6.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 2679.0}
+{"estimated_elbo": -2.404808648406592, "iteration": 7.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 3063.0}
+{"estimated_elbo": -2.406845229556533, "iteration": 8.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 3447.0}
+{"estimated_elbo": -2.4084592062182133, "iteration": 9.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 3831.0}
+{"estimated_elbo": -2.4095462388494107, "iteration": 10.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 4215.0}
+{"estimated_elbo": -2.410094796285103, "iteration": 11.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 4599.0}
+{"estimated_elbo": -2.410164674832489, "iteration": 12.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 4983.0}
+{"estimated_elbo": -2.4098434400284554, "iteration": 13.0, "learning_signal_std": 0.0, "mean_return": -2.400000000000001, "simulator_steps": 5367.0}

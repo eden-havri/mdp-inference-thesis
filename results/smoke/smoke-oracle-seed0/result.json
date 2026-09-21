@@ -1,0 +1,10 @@
+{
+  "method": "oracle",
+  "random_value": -1.3984189670480356,
+  "transition_budget": 0,
+  "value": 4.332131965268032,
+  "oracle_kind": "nonstationary_finite_horizon",
+  "simulator_steps": 0,
+  "oracle_value": 4.332131965268032,
+  "elapsed_seconds": 0.16667723655700684
+}

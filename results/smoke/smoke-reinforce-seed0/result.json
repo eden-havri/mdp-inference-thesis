@@ -1,0 +1,9 @@
+{
+  "method": "reinforce",
+  "random_value": -1.3984189670480356,
+  "transition_budget": 5000,
+  "value": 0.48526449260716065,
+  "simulator_steps": 5000,
+  "oracle_value": 4.332131965268032,
+  "elapsed_seconds": 2.4550530910491943
+}

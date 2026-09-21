@@ -1,0 +1,22 @@
+\DocSection{Discussion and Limitations}
+\label{sec:discussion}
+
+The corrected formulation preserves expected-return ordering at the level of
+target modes. A finite-temperature draw is nevertheless not an
+expected-return-optimal policy in the classical sense; it is a randomized
+selection rule whose behavior depends on \(\beta\) and the reference measure.
+Those modeling choices must be stated rather than described as data-driven
+epistemic uncertainty.
+
+The direct objective in Equation~\eqref{eq:correct-elbo} avoids a nonlinear
+transformation of a noisy log density, but it can still have high gradient
+variance and a restrictive variational family. A factorized statewise proposal
+cannot represent correlations between alternative policy modes. Structured
+global latent variables, autoregressive assignments, or retained weighted
+policy particles are possible extensions, provided their objectives continue
+to target Equation~\eqref{eq:policy-target}.
+
+Finally, simulator access makes the method a form of planning with a generative
+model. It should not be described as model-free merely because transition
+probabilities are never enumerated.
+

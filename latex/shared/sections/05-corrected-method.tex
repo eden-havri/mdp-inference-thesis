@@ -1,0 +1,146 @@
+\DocSection{Corrected Inference Method}
+\label{sec:corrected-method}
+
+\DocSubsection{Direct stochastic variational objective}
+
+Let \(q_\theta\) be a tractable distribution over complete deterministic
+policies. The corrected method maximizes the evidence lower bound implied by
+Equation~\eqref{eq:gibbs-variational}:
+\begin{equation}
+  \mathcal{L}(\theta)
+  = \beta\E_{\policy\sim q_\theta}
+      [\ExpectedReturn_H(\policy)]
+    - \KL(q_\theta\|\mu).
+  \label{eq:correct-elbo}
+\end{equation}
+Sampling \(\policy\sim q_\theta\) and then
+\(\tau\sim p(\cdot\mid\policy)\) gives an unbiased estimator of the
+return term because Equation~\eqref{eq:correct-elbo} is linear in
+\(\ExpectedReturn_H\).
+
+For a score-function estimator, a valid single-sample gradient contribution is
+\begin{equation}
+  \left(
+    \beta\Return_H(\tau)
+    + \log\mu(\policy)
+    - \log q_\theta(\policy)
+    - b
+  \right)
+  \nabla_\theta\log q_\theta(\policy),
+  \label{eq:score-gradient}
+\end{equation}
+where \(b\) is an action-independent control variate. Multiple independent
+rollouts of the same policy may be averaged before applying
+Equation~\eqref{eq:score-gradient}; this reduces variance without changing the
+target.
+
+\DocSubsection{Policy representation and execution}
+
+For a finite tabular policy, actions may be sampled lazily and memoized on the
+first visit to each state. The log proposal probability contains each sampled
+state assignment exactly once. Particle resampling, when used as an auxiliary
+search mechanism, must copy the state, policy memo, visit counters, and any
+other ancestry-dependent state together.
+
+The primary execution rule samples one policy-level object at the beginning of
+an episode and preserves it until termination. A separately named
+\emph{marginal-action} ablation samples from estimated statewise marginals on
+every visit. Comparing these two rules measures the value of policy-level
+correlation instead of assuming it away.
+
+\DocSubsection{Role of common random numbers}
+
+Shared random streams may compare candidate policies under matched transition
+noise. They are treated as a variance-reduction design, not as part of the
+probabilistic target. A correct estimator should converge to the same result
+under shared and independent streams; finite-sample efficiency may differ.
+
+\DocSubsection{Replicated sample-average policy SMC}
+
+For a fixed bank of \(K\) simulator tapes
+\(\Xi_K=(\xi_1,\ldots,\xi_K)\), define
+\begin{equation}
+  \widehat J_K(\policy;\Xi_K)
+  = \frac{1}{K}\sum_{k=1}^{K}\Return_H(\policy,\xi_k).
+  \label{eq:saa-return}
+\end{equation}
+The conditional sample-average target is
+\begin{equation}
+  P_{\beta,K}(d\policy\mid\Xi_K)
+  \propto \exp\!\left(\beta\widehat J_K(\policy;\Xi_K)\right)
+  \mu(d\policy).
+  \label{eq:saa-target}
+\end{equation}
+
+\DocSubsection{Learned full-support proposal}
+
+Let \(m\) denote the assignments already stored in a particle's policy memo,
+and let \(\mathcal A_\mu(s,m)\) be the prior-supported legal actions. A
+stochastic policy \(q_{\mathrm{PPO},\phi}\), trained with PPO, is used as a
+guide rather than as the inference target. With \(u_\mu(\cdot\mid s,m)\)
+uniform on \(\mathcal A_\mu(s,m)\), the actual proposal is
+\begin{equation}
+  q_{\epsilon,\phi}(a\mid s,m)
+  =
+  (1-\epsilon)q_{\mathrm{PPO},\phi}(a\mid s,m)
+  + \epsilon u_\mu(a\mid s,m),
+  \qquad 0<\epsilon\leq 1.
+  \label{eq:guided-proposal}
+\end{equation}
+Both components use the same legal-action mask. Hence every action in the
+target support has proposal probability at least
+\(\epsilon/|\mathcal A_\mu(s,m)|\). The mixture probability in
+Equation~\eqref{eq:guided-proposal}, rather than the unmixed PPO probability,
+is the denominator in every importance ratio.
+
+Each particle contains one policy memo and \(K\) environment replicas. Let
+\(U_t\) be the deterministically ordered set of distinct unassigned states
+first exposed by those replicas at simulation step \(t\). One action is drawn
+and memoized for each \(s\in U_t\). The exact incremental log-weight is
+\begin{equation}
+  \Delta\log w_t
+  =
+  \frac{\beta}{K}\sum_{k=1}^{K}r_{t,k}
+  +
+  \sum_{s\in U_t}
+  \left[
+    \log\mu(a_s\mid s,m_{<s})
+    -\log q_{\epsilon,\phi}(a_s\mid s,m_{<s})
+  \right].
+  \label{eq:guided-weight}
+\end{equation}
+Thus the mean reward is formed before exponentiation, and each prior/proposal
+correction is applied once per newly instantiated policy assignment, not once
+per replica or visit. Revisits reuse the memoized action. Resampling copies all
+replica states, the complete policy memo, and proposal context. No transition
+ratio is required because the conditional target and proposal use the same
+simulator dynamics.
+
+The guide is frozen within each SMC sweep, and the parameters, action mask,
+and value of \(\epsilon\) used to generate every proposal are recorded.
+Proposal adaptation between sweeps, if studied, uses a separate frozen
+snapshot for each sweep.
+
+For finite \(K\), Equation~\eqref{eq:saa-target} is an explicit approximation,
+not an unbiased representation of Equation~\eqref{eq:policy-target}. Under
+bounded returns and a finite policy class it converges uniformly as \(K\)
+increases. Experiments therefore report convergence in \(K\) separately from
+convergence in the number of policy particles.
+
+\DocSubsection{Proposal accounting and isolation}
+
+Training \(q_{\mathrm{PPO},\phi}\) is part of the guided method. Matched-budget
+comparisons count all simulator interactions, optimizer updates, wall-clock
+time, accelerator time, and peak memory used to train the proposal as well as
+the later SMC cost. Any amortized accounting is reported only as a separately
+specified multi-instance setting.
+
+The required isolation study includes uniform-proposal SMC
+(\(\epsilon=1\)), corrected guided SMC using
+Equations~\eqref{eq:guided-proposal}--\eqref{eq:guided-weight}, and a
+proposal-alone condition. The proposal-alone condition samples the same lazy,
+memoized deterministic policy from \(q_{\epsilon,\phi}\) but performs no
+importance weighting or resampling. It therefore isolates the contribution of
+SMC from that of the learned guide while preserving policy-commitment
+semantics. These conditions define the evaluation protocol; they do not state
+an empirical outcome.

@@ -1,0 +1,17 @@
+{
+  "run_id": "easy-map0-ppo-guided-terminal-is-seed0-beta2-b100k-n1024-k16",
+  "method": "ppo_guided_smc",
+  "map_path": "experiments/maps/easy-seed0.json",
+  "output_root": "results/easy-proposal-gate",
+  "training_seed": 0,
+  "transition_budget": 100000,
+  "beta": 2.0,
+  "evaluation_policy_samples": 300,
+  "direct_policy_samples": 32,
+  "direct_rollouts_per_policy": 4,
+  "learning_rate": 0.01,
+  "smc_particles": 1024,
+  "smc_tapes": 16,
+  "ess_threshold_ratio": 1e-06,
+  "proposal_uniform_mix": 0.05
+}

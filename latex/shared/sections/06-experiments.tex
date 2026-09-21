@@ -1,0 +1,51 @@
+\DocSection{Experimental Design}
+\label{sec:experiments}
+
+The experimental program begins with exact target-fidelity gates, proceeds to
+small end-to-end learning tests, and only then compares methods under matched
+environments and compute budgets.
+
+\DocSubsection{Target-fidelity tests}
+
+Small finite MDPs permit enumeration of deterministic policies and direct
+calculation of Equation~\eqref{eq:policy-target}. They provide the primary
+correctness tests:
+\begin{itemize}
+  \item total-variation or Kullback--Leibler error to the exact policy target;
+  \item recovery of target modes and statewise marginals;
+  \item sensitivity to transition variance at fixed expected return;
+  \item invariance to random-number coupling in the large-sample limit; and
+  \item agreement between memoized-policy execution and the predicted
+        trajectory distribution.
+\end{itemize}
+
+\DocSubsection{Control and scaling tests}
+
+Larger domains measure expected return, success probability, lower-tail
+return, simulator calls, wall-clock time, and peak memory. Difficulty should
+vary along interpretable axes: state-space size, obstacle density, horizon,
+transition stochasticity, delayed reward, and number of policy modes.
+
+Every comparison uses the same training seeds, evaluation seeds, rollout
+horizon, and termination convention. Hyperparameter search budgets are
+matched and reported separately from final evaluation. Reward scaling is
+paired with the inverse scaling of \(\beta\) whenever the intended target is
+held fixed.
+
+\begin{table}[t]
+  \centering
+  \caption{Minimum result matrix. Each cell should report central tendency,
+  uncertainty, and compute cost over independent runs.}
+  \label{tab:result-matrix}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Question & Required baseline & Primary metric \\
+    \midrule
+    Implementation validity & exact oracle & deterministic agreement \\
+    Target correctness & exact enumeration & distribution error \\
+    Control quality & planning baselines & expected and tail return \\
+    Scalability & matched compute & time and memory \\
+    Execution semantics & memoized vs marginal & trajectory divergence \\
+    \bottomrule
+  \end{tabular}
+\end{table}

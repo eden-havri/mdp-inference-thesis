@@ -1,0 +1,32 @@
+\DocAppendixTitle{Core Derivations}
+\label{app:derivations}
+
+\paragraph{Gibbs variational identity.}
+Let \(P_\beta\) be the target in Equation~\eqref{eq:policy-target}. For any
+\(Q\ll\mu\), expand
+\begin{align}
+  \KL(Q\|P_\beta)
+  &= \E_Q\left[
+       \log\frac{dQ}{d\mu}
+       - \beta\ExpectedReturn_H(\policy)
+       + \log Z_\beta
+     \right] \\
+  &= \log Z_\beta
+     - \left(
+       \beta\E_Q[\ExpectedReturn_H(\policy)]
+       - \KL(Q\|\mu)
+     \right).
+\end{align}
+Non-negativity of the left-hand side yields
+Equation~\eqref{eq:gibbs-variational}, with equality at \(Q=P_\beta\).
+
+\paragraph{Why a rollout is valid in the direct objective.}
+For \(\policy\sim q_\theta\) and
+\(\tau\sim p(\cdot\mid\policy)\), iterated expectation gives
+\[
+  \E_{\policy,\tau}[\Return_H(\tau)]
+  = \E_{\policy\sim q_\theta}
+    [\ExpectedReturn_H(\policy)].
+\]
+No exponential or logarithmic transformation is applied between the inner and
+outer expectations.

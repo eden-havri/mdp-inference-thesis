@@ -1,0 +1,74 @@
+[
+  {
+    "tier": "smoke",
+    "seed": 0,
+    "path": "experiments\\maps\\smoke-seed0.json",
+    "sha256": "a6212eef29437cac02b37c441fd4c0ccbca95e519dc228dcbbf5494df9bf6856"
+  },
+  {
+    "tier": "smoke",
+    "seed": 1,
+    "path": "experiments\\maps\\smoke-seed1.json",
+    "sha256": "c52ce8b6b27e205d7f871d90730369f88d68f332fa33fa9303c4e108640cbd42"
+  },
+  {
+    "tier": "smoke",
+    "seed": 2,
+    "path": "experiments\\maps\\smoke-seed2.json",
+    "sha256": "f8a834947c6f74ef3ce149cb39363431769de1d0d4a0c6a5ade681288f521b2e"
+  },
+  {
+    "tier": "easy",
+    "seed": 0,
+    "path": "experiments\\maps\\easy-seed0.json",
+    "sha256": "d10b0569fafc1a2aa93252328e551ab59ea52a31dd44ece73efb0e006168fed7"
+  },
+  {
+    "tier": "easy",
+    "seed": 1,
+    "path": "experiments\\maps\\easy-seed1.json",
+    "sha256": "68859e976cbe56b78f55cad3e4dcb453b4035e826edbf3896cfdc2776eb47968"
+  },
+  {
+    "tier": "easy",
+    "seed": 2,
+    "path": "experiments\\maps\\easy-seed2.json",
+    "sha256": "159de4d8556ea8c951966199aef4a9e9602e5b55e0d11401a476c5957b5f209f"
+  },
+  {
+    "tier": "medium",
+    "seed": 0,
+    "path": "experiments\\maps\\medium-seed0.json",
+    "sha256": "86953fbd257d49060ebab71099c71e539049208c2772b8d303171dc23433faa7"
+  },
+  {
+    "tier": "medium",
+    "seed": 1,
+    "path": "experiments\\maps\\medium-seed1.json",
+    "sha256": "567265ce5bd109b5e70f745e57f167993a8092e578013566242fae75fc88976e"
+  },
+  {
+    "tier": "medium",
+    "seed": 2,
+    "path": "experiments\\maps\\medium-seed2.json",
+    "sha256": "fc624b862f883c031f951aee343a93c0e95b0d9a7373e45f364315a4d8b7f919"
+  },
+  {
+    "tier": "hard",
+    "seed": 0,
+    "path": "experiments\\maps\\hard-seed0.json",
+    "sha256": "c4d622e2471c1c38f6b9213e3cb8831a555a6c4535c1fed8f3967c941b75055d"
+  },
+  {
+    "tier": "hard",
+    "seed": 1,
+    "path": "experiments\\maps\\hard-seed1.json",
+    "sha256": "a1d9849d61f40800f4a3b65f213b684e2e3232b8475c214312357f7282ae7331"
+  },
+  {
+    "tier": "hard",
+    "seed": 2,
+    "path": "experiments\\maps\\hard-seed2.json",
+    "sha256": "d2364ae18a96575c44218f39d3b18cdec1ce74276b1330c9f8c001a6848ac087"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "python": "3.13.1 (tags/v3.13.1:0671451, Dec  3 2024, 19:06:28) [MSC v.1942 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.2.1",
+  "torch": "2.13.0+cpu",
+  "pid": 7668,
+  "revision": "cd0287fc09404dd032324437304a2f4bd40a8437",
+  "dirty": true,
+  "map_hash": "f8a834947c6f74ef3ce149cb39363431769de1d0d4a0c6a5ade681288f521b2e",
+  "slurm_job_id": null,
+  "slurm_array_task_id": null
+}

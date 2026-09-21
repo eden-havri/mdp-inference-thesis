@@ -1,0 +1,52 @@
+\DocSection{Expected-Return Policy Target}
+\label{sec:target}
+
+For inverse temperature \(\beta>0\), define the target measure
+\begin{equation}
+  \Target(d\policy)
+  = \frac{\exp\!\left(\beta\ExpectedReturn_H(\policy)\right)}
+         {Z_{\beta}}\,\mu(d\policy),
+  \qquad
+  Z_{\beta}
+  = \int_{\PolicySpace}
+      \exp\!\left(\beta\ExpectedReturn_H(\policy)\right)\mu(d\policy).
+  \label{eq:policy-target}
+\end{equation}
+Bounded rewards and a finite reference measure make \(Z_\beta\) finite.
+The parameter \(\beta\) carries the inverse units of reward, so a change of
+reward units must be accompanied by the inverse change in \(\beta\).
+
+\begin{proposition}[Mode preservation]
+Every mode of \(\Target\) with respect to a uniform finite reference measure
+maximizes \(\ExpectedReturn_H\), and every expected-return maximizer is a mode.
+\end{proposition}
+
+\begin{proof}
+The exponential function is strictly increasing, and the normalizing constant
+does not depend on \(\policy\).
+\end{proof}
+
+The order of expectation and exponentiation is essential. In general,
+\begin{equation}
+  \exp\!\left(\beta\E[\Return_H]\right)
+  \neq
+  \E\!\left[\exp(\beta\Return_H)\right].
+  \label{eq:order-matters}
+\end{equation}
+The right-hand side defines an entropic-risk quantity and places additional
+weight on return variability. It is not an estimator identity for the target
+in Equation~\eqref{eq:policy-target}.
+
+The target also has the variational characterization
+\begin{equation}
+  \log Z_\beta
+  = \sup_Q
+    \left\{
+      \beta\E_{\policy\sim Q}[\ExpectedReturn_H(\policy)]
+      -\KL(Q\|\mu)
+    \right\}.
+  \label{eq:gibbs-variational}
+\end{equation}
+Thus the regularization acts on a distribution over complete policies. It is
+not the same as adding independent action entropy at every visited state.
+

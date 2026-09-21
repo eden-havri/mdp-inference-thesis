@@ -1,0 +1,9 @@
+{
+  "method": "random",
+  "random_value": -1.3984189670480356,
+  "transition_budget": 0,
+  "value": -1.3984189670480356,
+  "simulator_steps": 0,
+  "oracle_value": 4.332131965268032,
+  "elapsed_seconds": 0.15715765953063965
+}

@@ -1,0 +1,13 @@
+{
+  "method": "direct_elbo",
+  "random_value": -1.3984189670480356,
+  "transition_budget": 100000,
+  "marginal_action_value": -0.8389168738254418,
+  "committed_policy_value": -2.2583764394057666,
+  "committed_policy_value_std": 0.5052690018298536,
+  "training_simulator_steps": 100427,
+  "value": -2.2583764394057666,
+  "simulator_steps": 100427,
+  "oracle_value": 4.332131965268032,
+  "elapsed_seconds": 3.746891498565674
+}

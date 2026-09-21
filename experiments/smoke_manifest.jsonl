@@ -1,0 +1,7 @@
+{"run_id":"smoke-random-seed0","method":"random","map_path":"experiments/maps/smoke-seed0.json","output_root":"results/smoke","training_seed":0,"transition_budget":0}
+{"run_id":"smoke-oracle-seed0","method":"oracle","map_path":"experiments/maps/smoke-seed0.json","output_root":"results/smoke","training_seed":0,"transition_budget":0}
+{"run_id":"smoke-direct-seed0","method":"direct_elbo","map_path":"experiments/maps/smoke-seed0.json","output_root":"results/smoke","training_seed":0,"transition_budget":5000,"evaluation_policy_samples":500,"direct_policy_samples":8,"direct_rollouts_per_policy":2,"learning_rate":0.03}
+{"run_id":"smoke-smc-seed0","method":"replicated_smc","map_path":"experiments/maps/smoke-seed0.json","output_root":"results/smoke","training_seed":0,"transition_budget":5000,"evaluation_policy_samples":500,"direct_policy_samples":8,"direct_rollouts_per_policy":2,"learning_rate":0.03,"smc_particles":128,"smc_tapes":8}
+{"run_id":"smoke-reinforce-seed0","method":"reinforce","map_path":"experiments/maps/smoke-seed0.json","output_root":"results/smoke","training_seed":0,"transition_budget":5000,"learning_rate":0.03}
+{"run_id":"smoke-ppo-seed0","method":"ppo","map_path":"experiments/maps/smoke-seed0.json","output_root":"results/smoke","training_seed":0,"transition_budget":5000,"learning_rate":0.01}
+{"run_id":"smoke-sac-seed0","method":"sac","map_path":"experiments/maps/smoke-seed0.json","output_root":"results/smoke","training_seed":0,"transition_budget":5000,"learning_rate":0.01}
