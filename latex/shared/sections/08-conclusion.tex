@@ -1,11 +1,20 @@
 \DocSection{Conclusion}
 \label{sec:conclusion}
 
-Expected-return policy inference is well defined once the target measure,
+Expected-return policy inference is well defined only after the policy space,
 reference measure, inverse temperature, and execution semantics are explicit.
-The central correction is methodological: an unbiased estimator of expected
-return may be used linearly in the policy-space variational objective, but it
-cannot be exponentiated inside a multi-sample log average without changing the
-quantity being optimized. Exact finite-policy gates and
-convergence-controlled sample averages make that claim directly testable and
-give the empirical results a clear interpretation.
+The key mathematical choice is to exponentiate a policy's expected return, not
+to average exponentiated realized returns.  Guided replica-exchange
+Metropolis--Hastings provides an exact sampler when policy values are computed
+by dynamic programming and an exact sampler for a declared fixed-tape
+sample-average target under simulator access.  Full-support guidance can
+improve proposals without changing either target because every local move is
+Hastings-corrected.
+
+The empirical claim remains deliberately narrower than the mathematical one.
+Exact tiny-domain agreement is established before scaling, and medium pilots
+must demonstrate mixing and acceptable cost before any confirmatory comparison.
+The final study will compare committed-policy control performance, target
+fidelity, and total compute against five precisely specified baselines.  Until
+those gates pass, the contribution is a testable formulation and algorithmic
+protocol rather than a claim of empirical superiority.

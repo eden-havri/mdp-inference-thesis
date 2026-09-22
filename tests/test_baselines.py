@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import torch
 
 import mdp_inference.baselines as baseline_module
 from mdp_inference.artifacts import write_grid_spec
@@ -90,6 +91,80 @@ def test_double_q_target_selects_with_one_table_and_evaluates_with_the_other() -
     assert terminal_target == 2.0
 
 
+def test_double_q_target_uses_the_correct_finite_horizon_slice() -> None:
+    # The same physical next state has a different greedy action and value at
+    # the two times.  A state-only table would necessarily alias these targets.
+    selection_q = np.array(
+        [
+            [[8.0, 1.0]],
+            [[1.0, 8.0]],
+        ],
+        dtype=np.float64,
+    )
+    evaluation_q = np.array(
+        [
+            [[3.0, 30.0]],
+            [[40.0, 5.0]],
+        ],
+        dtype=np.float64,
+    )
+    first = baseline_module._double_q_td_target(
+        selection_q,
+        evaluation_q,
+        next_state=0,
+        reward=1.0,
+        done=False,
+        gamma=0.5,
+        rng=np.random.default_rng(1),
+        next_time=0,
+    )
+    second = baseline_module._double_q_td_target(
+        selection_q,
+        evaluation_q,
+        next_state=0,
+        reward=1.0,
+        done=False,
+        gamma=0.5,
+        rng=np.random.default_rng(1),
+        next_time=1,
+    )
+    assert first == 2.5
+    assert second == 3.5
+
+
+def test_discrete_sac_target_uses_the_correct_finite_horizon_slice() -> None:
+    actor_logits = torch.zeros((1, 2), dtype=torch.float64)
+    target_q1 = torch.tensor(
+        [[[2.0, 2.0]], [[7.0, 7.0]]], dtype=torch.float64
+    )
+    target_q2 = target_q1.clone()
+    targets = baseline_module._discrete_sac_td_targets(
+        actor_logits=actor_logits,
+        target_q1=target_q1,
+        target_q2=target_q2,
+        next_times=torch.tensor([0, 1, 2]),
+        next_states=torch.tensor([0, 0, 0]),
+        rewards=torch.tensor([1.0, 1.0, 4.0], dtype=torch.float64),
+        dones=torch.tensor([False, False, True]),
+        gamma=0.5,
+        alpha=0.0,
+    )
+    assert torch.allclose(targets, torch.tensor([2.0, 4.5, 4.0], dtype=torch.float64))
+
+
+def test_stationary_double_q_projection_uses_observed_time_occupancy() -> None:
+    q_values = np.array(
+        [
+            [[4.0, 0.0], [0.0, 0.0]],
+            [[0.0, 3.0], [0.0, 5.0]],
+        ],
+        dtype=np.float64,
+    )
+    visits = np.array([[1, 0], [3, 2]], dtype=np.int64)
+    probabilities = baseline_module._stationary_double_q_projection(q_values, visits)
+    assert np.array_equal(probabilities, np.array([[0.0, 1.0], [0.0, 1.0]]))
+
+
 def test_cem_elite_update_uses_smoothed_frequencies_and_probability_floor() -> None:
     probabilities = np.full((2, 2), 0.5, dtype=np.float64)
     elite_decisions = np.array([[0, 1], [0, 1], [1, 1]], dtype=np.int64)
@@ -133,6 +208,20 @@ def test_new_tabular_baselines_are_reproducible_and_share_budget_accounting() ->
         double_q_second.action_probabilities,
     )
     assert double_q_first.history == double_q_second.history
+
+    sac_config = DiscreteSACConfig(
+        transition_budget=250,
+        learning_starts=16,
+        batch_size=16,
+        updates_per_transition=1,
+        seed=19,
+    )
+    sac_first = train_discrete_sac(mdp, sac_config)
+    sac_second = train_discrete_sac(mdp, sac_config)
+    assert 250 <= sac_first.transitions < 250 + mdp.horizon
+    assert sac_first.transitions == sac_second.transitions
+    assert np.array_equal(sac_first.action_probabilities, sac_second.action_probabilities)
+    assert sac_first.history == sac_second.history
 
 
 def test_new_tabular_baselines_use_the_shared_experiment_budget(tmp_path) -> None:

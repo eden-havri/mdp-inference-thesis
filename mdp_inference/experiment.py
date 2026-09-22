@@ -77,6 +77,7 @@ class ExperimentConfig:
     mcmc_ladder_power: float = 2.0
     mcmc_swap_interval: int = 1
     mcmc_guide_strength: float = 0.5
+    mcmc_prior_initialize_hot_replicas: bool = False
 
     @classmethod
     def from_json(cls, path: Path) -> "ExperimentConfig":
@@ -199,6 +200,10 @@ def run_experiment(config: ExperimentConfig) -> Path:
     map_path = Path(config.map_path).resolve()
     spec, map_hash = load_grid_spec(map_path)
     mdp = gridworld_mdp(spec)
+    if config.method in {"reinforce", "ppo", "sac"} and not np.isclose(mdp.gamma, 1.0):
+        raise NotImplementedError(
+            "discounted REINFORCE/PPO/SAC semantics are not yet validated; use gamma=1"
+        )
     goal_states = tuple(state_of(spec, cell) for cell in spec.goals)
     final_dir = Path(config.output_root).resolve() / config.run_id
     if (final_dir / "DONE").exists():
@@ -733,6 +738,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     thinning=config.mcmc_thinning,
                     swap_interval=config.mcmc_swap_interval,
                     guide_strength=config.mcmc_guide_strength,
+                    prior_initialize_hot_replicas=(
+                        config.mcmc_prior_initialize_hot_replicas
+                    ),
                     seed=config.training_seed + 6_000_003,
                 ),
                 tapes=mcmc_tapes,
@@ -745,6 +753,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 [mdp.expected_return(policy) for policy in chain.policies], dtype=np.float64
             )
             exact_return_ess = autocorrelation_effective_sample_size(exact_chain_values)
+            occupancy = chain.policy_occupancy_diagnostics(mdp)
             _, proposal_committed_mean, proposal_committed_std = _sample_committed_policies(
                 mdp,
                 proposal.action_probabilities,
@@ -781,11 +790,43 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     "mcmc_thinning": config.mcmc_thinning,
                     "mcmc_samples": int(len(chain.policies)),
                     "mcmc_temperatures": config.mcmc_temperatures,
+                    "mcmc_prior_initialize_hot_replicas": (
+                        config.mcmc_prior_initialize_hot_replicas
+                    ),
                     "mcmc_beta_ladder": chain.betas.tolist(),
                     "mcmc_local_acceptance_rates": chain.local_acceptance_rates.tolist(),
                     "mcmc_swap_acceptance_rates": chain.swap_acceptance_rates.tolist(),
                     "mcmc_target_return_ess": chain.return_effective_sample_size,
                     "mcmc_exact_return_ess": exact_return_ess,
+                    "mcmc_policy_occupancy_ess": (
+                        occupancy.conservative_effective_sample_size
+                    ),
+                    "mcmc_policy_occupancy_ess_quantiles": (
+                        occupancy.effective_sample_size_quantiles.tolist()
+                    ),
+                    "mcmc_states_without_action_switches": (
+                        occupancy.states_without_action_switches
+                    ),
+                    "mcmc_min_state_action_switch_rate": float(
+                        occupancy.state_action_switch_rates.min()
+                    ),
+                    "mcmc_mean_state_action_switch_rate": float(
+                        occupancy.state_action_switch_rates.mean()
+                    ),
+                    "mcmc_unique_policy_samples": occupancy.unique_policy_count,
+                    "mcmc_unique_policy_fraction": occupancy.unique_policy_fraction,
+                    "mcmc_mean_policy_hamming_jump": (
+                        occupancy.mean_policy_hamming_jump
+                    ),
+                    "mcmc_walker_temperature_visit_fractions": (
+                        chain.temperature_visit_fractions.tolist()
+                    ),
+                    "mcmc_walker_endpoint_transitions": (
+                        chain.walker_endpoint_transitions.tolist()
+                    ),
+                    "mcmc_walker_round_trips": chain.walker_round_trips.tolist(),
+                    "mcmc_total_round_trips": int(chain.walker_round_trips.sum()),
+                    "mcmc_cold_walker_count": chain.cold_walker_count,
                     "mcmc_value_evaluations": chain.value_evaluations,
                     "mcmc_simulator_steps": chain.simulator_steps,
                     "mcmc_elapsed_seconds": mcmc_elapsed,

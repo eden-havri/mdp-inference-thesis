@@ -3,6 +3,13 @@
 Do not run experiments on the login node. First run one interactive/single-task
 smoke job, inspect its artifacts and accounting, then submit a capped array.
 
+The September 2026 cluster guide recommends the `main` partition with
+`--gpus=0` for ordinary CPU work. The scripts request a small local scratch
+allocation and direct temporary files there; final artifacts remain under the
+manifest's result directory. Measured pilots used one CPU core and under
+300 MB RAM, so experiment rows request one core and 2 GB rather than reserving
+idle resources.
+
 The cluster account is `brafman`. From the project root, create the isolated
 Python environment on a compute node once:
 
@@ -23,6 +30,7 @@ After completion:
 
 ```bash
 python -m mdp_inference.cli audit experiments/smoke_manifest.jsonl
+jobstats <job-id>
 ```
 
 Run the one-row canary before any array:

@@ -1,10 +1,20 @@
-This manuscript studies inference over deterministic policies while preserving
-the ordinary expected-return criterion of a stochastic Markov decision process.
-The scientific target is a Gibbs distribution whose log density is proportional
-to a policy's expected return, not to an exponentiated realized trajectory
-return. That distinction determines which Monte Carlo estimators are valid.
-The proposed approach combines a direct policy-space variational objective
-with a replicated particle method that averages each policy's return over
-common simulator tapes before exponentiation. Both maintain one sampled policy
-across an episode. The empirical program measures control performance,
-computational cost, and fidelity to the intended policy distribution.
+We study generalized Bayesian inference over complete deterministic policies
+while preserving the ordinary expected-return objective of a stochastic Markov
+decision process.  The target is a Gibbs measure whose log density is
+proportional to a policy's expected return.  It is therefore different from a
+trajectory target that averages exponentiated realized returns, which is
+risk-sensitive even when the intended control objective is not.  Our primary
+algorithm is replica-exchange Metropolis--Hastings in policy space.  A learned
+PPO policy supplies full-support single-state proposals, but an exact Hastings
+correction prevents the guide from changing the invariant distribution.  When
+the transition model is available, dynamic programming evaluates the exact
+target; with simulator-only access, an immutable bank of common random-number
+tapes defines a transparent sample-average approximation.  Direct variational
+and replicated sequential Monte Carlo estimators provide complementary
+ablations.  Evaluation samples one complete policy and commits to it for the
+episode, and compares against precisely specified REINFORCE, PPO-Clip, discrete
+SAC, categorical cross-entropy search, and Double Q-learning baselines under
+matched interaction and compute accounting.  Exact finite-policy gates precede
+larger stochastic GridWorld experiments.  Confirmatory empirical results are
+not yet claimed in this draft; medium-scale mixing and cost gates remain in
+progress.

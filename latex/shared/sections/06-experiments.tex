@@ -1,51 +1,167 @@
 \DocSection{Experimental Design}
 \label{sec:experiments}
 
-The experimental program begins with exact target-fidelity gates, proceeds to
-small end-to-end learning tests, and only then compares methods under matched
-environments and compute budgets.
+The empirical study asks four separate questions: (i) does an implementation
+sample the stated target, (ii) does tempering mix across relevant policy modes,
+(iii) do target samples control the environment well under policy commitment,
+and (iv) what simulator and compute cost is required?  Success on the control
+metric cannot substitute for failure on target fidelity or mixing.
 
-\DocSubsection{Target-fidelity tests}
+\DocSubsection{Domains and scope}
 
-Small finite MDPs permit enumeration of deterministic policies and direct
-calculation of Equation~\eqref{eq:policy-target}. They provide the primary
-correctness tests:
-\begin{itemize}
-  \item total-variation or Kullback--Leibler error to the exact policy target;
-  \item recovery of target modes and statewise marginals;
-  \item sensitivity to transition variance at fixed expected return;
-  \item invariance to random-number coupling in the large-sample limit; and
-  \item agreement between memoized-policy execution and the predicted
-        trajectory distribution.
-\end{itemize}
+Stochastic GridWorld is the complete primary study.  Easy, medium, and hard
+families vary grid size, obstacle density, horizon, transition slip, delayed
+reward, and route multiplicity.  Small instances retain exact enumeration;
+larger instances retain exact dynamic-programming evaluation of any fixed
+policy even when enumerating all policies is impossible.
 
-\DocSubsection{Control and scaling tests}
+Only domains that add a distinct scientific stress test are considered after
+GridWorld passes its medium gates:
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Domain-extension decision.  Extensions are conditional on the
+  primary GridWorld study rather than required to enlarge the result table.}
+  \label{tab:domain-scope}
+  \begin{tabular}{@{}p{27mm}p{66mm}p{39mm}@{}}
+    \toprule
+    Domain & Added evidence & Decision \\
+    \midrule
+    Blackjack & Compact nonspatial stochasticity and intrinsic return
+      variance with two actions \citep{towersEtAl2025} & First low-cost
+      extension after GridWorld \\
+    Tireworld & Stochastic failures, resources, sparse success, and competing
+      routes \citep{bonetGeffner2005} & Best second headline domain if time and
+      compute remain \\
+    Taxi & Action masks and subgoals, but mostly deterministic and spatial &
+      Optional smoke test only \\
+    Academic Advising & Factored multivalued state and concurrent actions
+      \citep{guerinEtAl2012} & Future structured-policy work \\
+    Continuous control & Requires a new reference measure and policy-space
+      sampler & Out of scope \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
-Larger domains measure expected return, success probability, lower-tail
-return, simulator calls, wall-clock time, and peak memory. Difficulty should
-vary along interpretable axes: state-space size, obstacle density, horizon,
-transition stochasticity, delayed reward, and number of policy modes.
+A Tireworld extension would use a verified factored-state adapter; pyRDDLGym
+is a possible RDDL-to-simulator route \citep{taitlerEtAl2022}.  Transition,
+termination, reward, and action-mask tests on a small instance are mandatory
+before any such results are included.
 
-Every comparison uses the same training seeds, evaluation seeds, rollout
-horizon, and termination convention. Hyperparameter search budgets are
-matched and reported separately from final evaluation. Reward scaling is
-paired with the inverse scaling of \(\beta\) whenever the intended target is
-held fixed.
+\DocSubsection{Competitors and controls}
+
+The competitor implementations preserve each published core update while
+using a common tabular code path for identical environment semantics, seeding,
+transition accounting, and artifacts.  They are named by the exact implemented
+variant rather than by a broader software package.
 
 \begin{table}[t]
   \centering
-  \caption{Minimum result matrix. Each cell should report central tendency,
-  uncertainty, and compute cost over independent runs.}
+  \footnotesize
+  \caption{Learned competitors.  Uniform random behavior and exact
+  finite-horizon dynamic programming are controls, not competitors.}
+  \label{tab:competitors}
+  \begin{tabular}{@{}p{27mm}p{65mm}p{38mm}@{}}
+    \toprule
+    Reported method & Implemented variant & Role \\
+    \midrule
+    REINFORCE & Monte Carlo policy gradient with learned state-value baseline
+      \citep{williams1992} & Basic on-policy baseline \\
+    PPO-Clip & Clipped surrogate, Monte Carlo advantages, entropy bonus; no GAE
+      or value clipping \citep{schulman2017} & Stronger on-policy baseline and
+      separately costed proposal trainer \\
+    Discrete SAC & Categorical actor, twin critics, target critics, replay, and
+      fixed entropy temperature \citep{christodoulou2019} & Off-policy
+      entropy-regularized baseline \\
+    Categorical CEM & Distribution search over complete stationary
+      deterministic policies \citep{mannorEtAl2003} & Direct black-box policy
+      search \\
+    Double Q-learning & Online tabular Double Q-learning with linearly annealed
+      epsilon-greedy exploration \citep{vanHasselt2010} & Value-learning
+      baseline \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The exact control is nonstationary and may use the known model, so it is an
+upper reference rather than a fair learned competitor.  All learned and
+inferred policies use stationary physical-state inputs.  Discrete SAC and
+Double Q-learning therefore share the same time-aliasing limitation as the
+policy-inference methods.
+
+\DocSubsection{Common evaluation semantics}
+
+For every non-oracle method, the primary evaluator samples a complete
+deterministic policy from the reported distribution and commits to it for the
+entire episode.  For an explicit particle or MCMC sample, that complete policy
+is used directly.  For statewise categorical outputs, one action is sampled
+once at every decision state before evaluation.  Primary metrics are mean exact
+expected return and exact goal-reaching probability over these committed
+policies.  Their sample standard deviation and standard error describe
+variation over policy draws.
+
+Per-visit stochastic execution, statewise marginal probabilities, and the
+statewise maximum-probability policy are reported separately.  They cannot
+replace the committed-policy result because they destroy or collapse
+policy-level dependence.  Secondary metrics include lower-tail return,
+distributional target error where enumeration is possible, and mode recovery.
+
+\DocSubsection{Fair budgets and tuning}
+
+Every comparison uses the same maps, training seeds, evaluation streams,
+horizon, reward, and termination convention.  Current GridWorld runs use
+\(\gamma=1\); discounted baseline semantics must be validated before any
+\(\gamma<1\) experiment.  Method-specific tuning grids are allowed because a
+single global learning rate is not a fair tuning policy, but tuning allowance
+is matched in environment transitions and core-hours.  Tuning maps and seeds
+are disjoint from the final confirmatory set.
+
+All interactions used by PPO guide training, SMC, policy-bank evaluation, and
+sample-average MCMC count toward the proposed method.  Exact policy-value
+evaluations, optimizer updates, wall time, CPU or accelerator time, and peak
+memory are reported separately.  A generally applicable exploration aid is
+offered to compatible methods or labeled as a separate assisted ablation.
+Competitor bugs are fixed; no baseline is weakened to improve a comparison.
+
+\DocSubsection{Cost-effective execution order}
+
+After gates G0--G3 in Section~\ref{sec:validation}, one seed and the smallest
+budget run for every method on each map family.  Only finite, semantically valid
+runs advance to a three-seed timing and learning pilot.  That pilot estimates
+resource requests and identifies clearly dominated settings.  Hyperparameters
+are then tuned on designated development instances.  Finally, one frozen
+manifest launches the full seed-by-map comparison.  Job arrays are capped to
+avoid simultaneous infrastructure failures, and each completed run writes a
+validated marker so interrupted arrays can resume without overwriting results.
+
+The same order applies to domain extension: one exact Blackjack instance, one
+seed per method, then three-seed timing, and only then a complete table.
+Tireworld work begins only after the GridWorld confirmatory manifest is frozen.
+
+\DocSubsection{Current empirical status}
+
+Confirmatory values are \textbf{TBD}.  A preliminary medium-GridWorld
+exact-value tempering diagnostic produced a strong committed policy but low
+cold-chain return effective sample size and no accepted exchanges on the
+coldest ladder edge.  It therefore failed the mixing gate and triggered
+warm-start and ladder-spacing diagnostics; it is not evidence that the method
+outperforms a competitor.  Full-scale arrays remain paused until a medium gate
+passes and independent-chain policy mixing is checked.
+
+\begin{table}[t]
+  \centering
+  \caption{Required confirmatory reporting.  No entry is populated from pilot
+  runs.}
   \label{tab:result-matrix}
   \begin{tabular}{@{}lll@{}}
     \toprule
-    Question & Required baseline & Primary metric \\
+    Question & Comparison & Primary report \\
     \midrule
-    Implementation validity & exact oracle & deterministic agreement \\
-    Target correctness & exact enumeration & distribution error \\
-    Control quality & planning baselines & expected and tail return \\
-    Scalability & matched compute & time and memory \\
-    Execution semantics & memoized vs marginal & trajectory divergence \\
+    Target correctness & exact enumeration & distribution error and mode mass \\
+    Mixing & chains and ladders & ESS, swaps, and between-chain agreement \\
+    Control quality & five competitors & committed return and goal probability \\
+    Robustness & map families and seeds & uncertainty and failed-run count \\
+    Scalability & matched accounting & interactions, time, and memory \\
     \bottomrule
   \end{tabular}
 \end{table}

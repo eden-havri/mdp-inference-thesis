@@ -20,6 +20,7 @@ class PolicyTemperingConfig:
     thinning: int = 10
     swap_interval: int = 1
     guide_strength: float = 0.5
+    prior_initialize_hot_replicas: bool = False
     seed: int = 0
 
 
@@ -32,6 +33,9 @@ class PolicyTemperingResult:
     local_accepts: np.ndarray
     swap_proposals: np.ndarray
     swap_accepts: np.ndarray
+    walker_temperature_visits: np.ndarray
+    walker_endpoint_transitions: np.ndarray
+    walker_round_trips: np.ndarray
     value_evaluations: int
     simulator_steps: int
 
@@ -64,6 +68,153 @@ class PolicyTemperingResult:
                 self.policies[:, state], minlength=mdp.num_actions
             ) / float(len(self.policies))
         return marginals
+
+    def policy_occupancy_diagnostics(
+        self, mdp: FiniteHorizonMDP
+    ) -> PolicyOccupancyDiagnostics:
+        """Diagnose mixing of the sampled complete policies.
+
+        Return ESS alone can look perfect while the chain is trapped among
+        distinct policies with the same return.  These diagnostics instead use
+        the categorical action trace at every decision state.  Indicator ESS
+        is undefined for a constant trace, so those entries are represented by
+        ``NaN`` and the conservative per-state ESS is defined as zero.  This is
+        an explicit warning about an untested occupancy probability, not a
+        claim that the true posterior must put mass on another action.
+        """
+
+        decision_states = np.asarray(mdp.decision_states, dtype=np.int64)
+        actions = self.policies[:, decision_states]
+        state_action_ess = _categorical_indicator_ess(actions, mdp.num_actions)
+        varying = np.isfinite(state_action_ess)
+        state_ess = np.zeros(mdp.num_decisions, dtype=np.float64)
+        for decision in range(mdp.num_decisions):
+            if np.any(varying[decision]):
+                state_ess[decision] = float(
+                    np.min(state_action_ess[decision, varying[decision]])
+                )
+
+        if len(actions) <= 1:
+            switch_rates = np.zeros(mdp.num_decisions, dtype=np.float64)
+            mean_hamming_jump = 0.0
+        else:
+            changed = actions[1:] != actions[:-1]
+            switch_rates = changed.mean(axis=0)
+            mean_hamming_jump = float(changed.mean())
+        unique_policy_count = int(np.unique(actions, axis=0).shape[0])
+        return PolicyOccupancyDiagnostics(
+            state_action_effective_sample_sizes=state_action_ess,
+            state_effective_sample_sizes=state_ess,
+            state_action_switch_rates=switch_rates,
+            unique_policy_count=unique_policy_count,
+            unique_policy_fraction=unique_policy_count / float(len(actions)),
+            mean_policy_hamming_jump=mean_hamming_jump,
+        )
+
+    @property
+    def temperature_visit_fractions(self) -> np.ndarray:
+        totals = self.walker_temperature_visits.sum(axis=1, keepdims=True)
+        return np.divide(
+            self.walker_temperature_visits,
+            totals,
+            out=np.zeros_like(self.walker_temperature_visits, dtype=np.float64),
+            where=totals > 0,
+        )
+
+    @property
+    def cold_walker_count(self) -> int:
+        """Number of distinct configuration walkers observed at target beta."""
+
+        return int(np.count_nonzero(self.walker_temperature_visits[:, -1]))
+
+
+@dataclass(frozen=True)
+class PolicyOccupancyDiagnostics:
+    """Mixing diagnostics for categorical complete-policy samples."""
+
+    state_action_effective_sample_sizes: np.ndarray
+    state_effective_sample_sizes: np.ndarray
+    state_action_switch_rates: np.ndarray
+    unique_policy_count: int
+    unique_policy_fraction: float
+    mean_policy_hamming_jump: float
+
+    @property
+    def conservative_effective_sample_size(self) -> float:
+        return float(np.min(self.state_effective_sample_sizes))
+
+    @property
+    def states_without_action_switches(self) -> int:
+        return int(np.count_nonzero(self.state_action_switch_rates == 0.0))
+
+    @property
+    def effective_sample_size_quantiles(self) -> np.ndarray:
+        return np.quantile(
+            self.state_effective_sample_sizes,
+            [0.0, 0.1, 0.5, 0.9, 1.0],
+        )
+
+
+def _categorical_indicator_ess(
+    actions: np.ndarray,
+    num_actions: int,
+    chunk_size: int = 128,
+) -> np.ndarray:
+    """Return indicator ESS for every state/action with bounded memory use.
+
+    Constant Bernoulli traces have no estimable autocorrelation and are
+    returned as ``NaN``.  Variable traces use the same initial-positive-
+    sequence convention as :func:`autocorrelation_effective_sample_size`, with
+    FFT autocovariances so large grids remain practical.
+    """
+
+    actions = np.asarray(actions, dtype=np.int64)
+    if actions.ndim != 2 or actions.shape[0] == 0:
+        raise ValueError("actions must be a nonempty [samples, decisions] array")
+    if num_actions < 2:
+        raise ValueError("num_actions must be at least two")
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+
+    num_samples, num_decisions = actions.shape
+    output = np.full((num_decisions, num_actions), np.nan, dtype=np.float64)
+    if num_samples == 1:
+        return output
+
+    total_traces = num_decisions * num_actions
+    fft_length = 1 << (2 * num_samples - 1).bit_length()
+    lag_denominators = np.arange(
+        num_samples, 0, -1, dtype=np.float64
+    )[:, None]
+    flat_output = output.reshape(-1)
+    for start in range(0, total_traces, chunk_size):
+        stop = min(start + chunk_size, total_traces)
+        trace_indices = np.arange(start, stop, dtype=np.int64)
+        state_indices = trace_indices // num_actions
+        action_indices = trace_indices % num_actions
+        indicators = actions[:, state_indices] == action_indices[None, :]
+        variable = np.any(indicators, axis=0) & ~np.all(indicators, axis=0)
+        if not np.any(variable):
+            continue
+
+        centered = indicators[:, variable].astype(np.float64)
+        centered -= centered.mean(axis=0, keepdims=True)
+        spectrum = np.fft.rfft(centered, n=fft_length, axis=0)
+        autocovariances = np.fft.irfft(
+            spectrum.conj() * spectrum,
+            n=fft_length,
+            axis=0,
+        )[:num_samples]
+        autocovariances /= lag_denominators
+        correlations = autocovariances[1:] / autocovariances[0]
+        positive_prefix = np.logical_and.accumulate(correlations > 0.0, axis=0)
+        correlation_sums = np.sum(
+            np.where(positive_prefix, correlations, 0.0), axis=0
+        )
+        effective_sizes = num_samples / (1.0 + 2.0 * correlation_sums)
+        effective_sizes = np.clip(effective_sizes, 1.0, float(num_samples))
+        flat_output[trace_indices[variable]] = effective_sizes
+    return output
 
 
 def power_beta_ladder(beta: float, num_temperatures: int, power: float) -> np.ndarray:
@@ -159,12 +310,14 @@ def run_replica_exchange_policy_mh(
         (config.num_temperatures, mdp.num_states),
         dtype=np.int64,
     )
-    # Overdispersed hot replicas reduce dependence on the learned initializer;
-    # only the target-temperature replica starts at the supplied policy.
-    for replica in range(config.num_temperatures - 1):
-        for state in decision_states:
-            policies[replica, state] = int(rng.integers(mdp.num_actions))
-    policies[-1] = base_policy
+    policies[:] = base_policy
+    if config.prior_initialize_hot_replicas:
+        # This option is useful as a deliberately overdispersed convergence
+        # check.  Sparse-reward grids normally warm-start every replica, then
+        # rely on the beta=0 chain to forget that initializer during burn-in.
+        for replica in range(config.num_temperatures - 1):
+            for state in decision_states:
+                policies[replica, state] = int(rng.integers(mdp.num_actions))
 
     value_evaluations = 0
     simulator_steps = 0
@@ -189,6 +342,16 @@ def run_replica_exchange_policy_mh(
     local_accepts = np.zeros(config.num_temperatures, dtype=np.int64)
     swap_proposals = np.zeros(config.num_temperatures - 1, dtype=np.int64)
     swap_accepts = np.zeros(config.num_temperatures - 1, dtype=np.int64)
+    # A walker label travels with its configuration during swaps.  Tracking
+    # labels is observational only: it consumes no randomness and cannot
+    # change the Markov transition kernel.
+    walker_ids = np.arange(config.num_temperatures, dtype=np.int64)
+    walker_temperature_visits = np.zeros(
+        (config.num_temperatures, config.num_temperatures), dtype=np.int64
+    )
+    walker_endpoint_transitions = np.zeros(config.num_temperatures, dtype=np.int64)
+    walker_round_trips = np.zeros(config.num_temperatures, dtype=np.int64)
+    walker_last_endpoint = np.full(config.num_temperatures, -1, dtype=np.int8)
     samples: list[np.ndarray] = []
     sample_returns: list[float] = []
 
@@ -232,7 +395,21 @@ def run_replica_exchange_policy_mh(
                 if np.log(rng.random()) < min(0.0, float(log_acceptance)):
                     policies[[lower, upper]] = policies[[upper, lower]]
                     returns[[lower, upper]] = returns[[upper, lower]]
+                    walker_ids[[lower, upper]] = walker_ids[[upper, lower]]
                     swap_accepts[lower] += 1
+
+        if iteration >= config.burn_in:
+            walker_temperature_visits[walker_ids, np.arange(config.num_temperatures)] += 1
+            for temperature, endpoint in ((0, 0), (config.num_temperatures - 1, 1)):
+                walker = int(walker_ids[temperature])
+                previous_endpoint = int(walker_last_endpoint[walker])
+                if previous_endpoint < 0:
+                    walker_last_endpoint[walker] = endpoint
+                elif previous_endpoint != endpoint:
+                    walker_endpoint_transitions[walker] += 1
+                    if walker_endpoint_transitions[walker] % 2 == 0:
+                        walker_round_trips[walker] += 1
+                    walker_last_endpoint[walker] = endpoint
 
         if iteration >= config.burn_in and (
             iteration - config.burn_in
@@ -248,6 +425,9 @@ def run_replica_exchange_policy_mh(
         local_accepts=local_accepts,
         swap_proposals=swap_proposals,
         swap_accepts=swap_accepts,
+        walker_temperature_visits=walker_temperature_visits,
+        walker_endpoint_transitions=walker_endpoint_transitions,
+        walker_round_trips=walker_round_trips,
         value_evaluations=value_evaluations,
         simulator_steps=simulator_steps,
     )

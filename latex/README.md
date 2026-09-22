@@ -50,14 +50,16 @@ bibliography style against the current graduate-school instructions.
 ## Scientific narrative
 
 The shared manuscript defines `exp(beta * expected return)` before choosing an
-approximation. It develops a direct ELBO and a replicated sample-average SMC
-method, preserves one sampled policy throughout an episode, and requires exact
-finite-MDP validation before scaling. Paired experiments use identical
-environments, seeds, evaluation budgets, and reporting.
+approximation. Its primary method is guided replica-exchange policy MCMC with
+exact Hastings correction. Exact dynamic-programming and fixed-tape
+sample-average targets are distinguished explicitly; direct ELBO and replicated
+SMC variants are retained as ablations. One sampled policy is preserved
+throughout each episode, and exact finite-MDP validation is required before
+scaling. Paired experiments use identical environments, seeds, evaluation
+budgets, and reporting.
 
 ## Metadata and references
 
 `shared/metadata.tex` contains the confirmed author and advisor names while
 faculty, department, and degree remain placeholders. `shared/references.bib`
-is intentionally empty; add only verified BibTeX records and cite them from
-the shared scientific files.
+contains the verified primary sources cited by both output wrappers.

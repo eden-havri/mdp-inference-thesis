@@ -1,0 +1,14 @@
+{
+  "python": "3.13.1 (tags/v3.13.1:0671451, Dec  3 2024, 19:06:28) [MSC v.1942 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.2.1",
+  "torch": "2.13.0+cpu",
+  "pid": 22172,
+  "revision": "2eee8ba4dbba626f8d028c77141d8154facecbe7",
+  "dirty": true,
+  "map_hash": "92839b74a884bd69b9d8d62411f634ddfaede65ff319072ec83e44c66f79f0e6",
+  "slurm_job_id": null,
+  "slurm_array_task_id": null,
+  "source_snapshot_sha256": "9d3317452a3d5ae8ab2e2ffde6f6fddf2ab46df84f94bdba1fcbeae30a0178ef",
+  "source_snapshot_file_count": 27
+}

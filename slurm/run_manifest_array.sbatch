@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=mdpi
 #SBATCH --account=brafman
-#SBATCH --partition=cpu
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=8G
+#SBATCH --partition=main
+#SBATCH --gpus=0
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=2G
+#SBATCH --tmp=2G
 #SBATCH --time=02:00:00
 #SBATCH --signal=B:USR1@120
 #SBATCH --output=slurm/logs/%x-%A_%a.out
@@ -20,5 +22,6 @@ manifest_path="$1"
 task_index="${SLURM_ARRAY_TASK_ID:?SLURM_ARRAY_TASK_ID is required}"
 
 mkdir -p slurm/logs
-conda run --no-capture-output --prefix /home/havri/.conda/envs/mdpi \
-  python -m mdp_inference.cli run-manifest-row "$manifest_path" "$task_index"
+export TMPDIR="${SLURM_SCRATCH_DIR:-/tmp}"
+/home/havri/.conda/envs/mdpi/bin/python \
+  -m mdp_inference.cli run-manifest-row "$manifest_path" "$task_index"

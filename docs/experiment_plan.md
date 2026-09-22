@@ -38,12 +38,15 @@ These are generally different in environments with revisitation. The complete-po
 | 0. Environment and evaluator | Local, diagnostic maps only | 5–30 minutes | Hand-computed transitions/rewards agree; exact oracle bounds all sampled policies; both evaluation modes are tested | Any disagreement in state indexing, terminal handling, horizon, rewards, or transition probabilities |
 | 1. Determinism and artifacts | One diagnostic and one easy map, two repeated runs | 10–30 minutes | Same configuration and seed reproduce metrics and checkpoint hashes; different seeds change stochastic traces; output paths never collide | Missing seed control, non-reproducible run, overwritten artifact, or unseeded evaluator |
 | 2. Algorithm smoke tests | One easy map, 3 training seeds, tiny budgets | 1–4 CPU-hours total | All methods finish; values remain finite; learned policies show improvement direction over random; oracle remains an upper bound | NaN/Inf, invalid probabilities, zero/absent gradients, no learning signal, or learned return outside valid bounds |
-| 3. Cluster timing pilot | One fixed map per GridWorld tier, 3 seeds, all learned methods | 36 learning jobs plus cheap controls | At least 90% clean completion; measured throughput, peak memory, and output size permit a credible final budget | Repeated timeout/OOM, unstable result schema, excessive per-checkpoint I/O, or unexplained local/cluster mismatch |
-| 4. GridWorld calibration | Two maps per tier, 5 seeds, validation only | 120 learning jobs for 4 learned methods | Hyperparameters are frozen; easy cases are solved; medium and hard cases show nontrivial separation from both random and oracle | Baselines cannot pass easy maps, hard maps are indistinguishable from random for every method, or maps are trivially solved by every method |
-| 5. GridWorld confirmation | Three held-out maps per tier, 10 seeds, frozen settings | 360 learning jobs for 4 learned methods | Predeclared metrics and intervals are computed from all valid runs; no post-hoc tuning | Any change to maps, seeds, rewards, budgets, or hyperparameters after inspecting test outcomes |
+| 3. Cluster timing pilot | One fixed map per GridWorld tier, 3 seeds, all learned methods | 54 learning jobs plus cheap controls | At least 90% clean completion; measured throughput, peak memory, and output size permit a credible final budget | Repeated timeout/OOM, unstable result schema, excessive per-checkpoint I/O, or unexplained local/cluster mismatch |
+| 4. GridWorld calibration | Two maps per tier, 5 seeds, validation only | 180 learning jobs for 6 learned methods | Hyperparameters are frozen; easy cases are solved; medium and hard cases show nontrivial separation from both random and oracle | Baselines cannot pass easy maps, hard maps are indistinguishable from random for every method, or maps are trivially solved by every method |
+| 5. GridWorld confirmation | Three held-out maps per tier, 10 seeds, frozen settings | 540 learning jobs for 6 learned methods | Predeclared metrics and intervals are computed from all valid runs; no post-hoc tuning | Any change to maps, seeds, rewards, budgets, or hyperparameters after inspecting test outcomes |
 | 6. Tireworld extension | Only after Stage 5 is stable | Start with 12–36 jobs | Small instance matches exact calculations; semantics and cost accounting reuse the same contract | Unvalidated action masking, terminal semantics, or transition probabilities |
 
-The job counts above assume the proposed method plus REINFORCE, PPO, and discrete SAC. Random and oracle policies are computed once per map and evaluation setting rather than retrained for each seed.
+The job counts above assume the proposed method plus REINFORCE, PPO, discrete
+SAC, categorical CEM, and Double Q-learning. Random and oracle controls are
+computed once per map and evaluation setting rather than retrained for each
+seed.
 
 ## Baseline implementation order
 
@@ -53,7 +56,9 @@ Implement and validate baselines in this order. Do not begin tuning the next lea
 2. **Exact finite-horizon oracle.** Dynamic programming gives the attainable upper bound under the same transition, reward, horizon, and policy class. Also retain an exact soft/entropy-regularized oracle as a diagnostic when comparing action marginals.
 3. **REINFORCE.** Use a learned or state-dependent baseline if desired, but record the variant explicitly. Its simplicity makes it the first end-to-end gradient and budget-accounting test.
 4. **PPO.** Add only after REINFORCE learns the easy tier. Log clipping rate, approximate divergence, policy entropy, and value loss.
-5. **Discrete SAC.** Add last because it introduces replay, target updates, entropy-temperature behavior, and more ways for budget accounting to diverge. Count only newly collected environment transitions as sample cost; log replay updates separately.
+5. **Double Q-learning.** Use time-indexed value tables for correct finite-horizon targets and report the declared stationary projection.
+6. **Discrete SAC.** Add last because it introduces replay, target updates, entropy-temperature behavior, and more ways for budget accounting to diverge. Count only newly collected environment transitions as sample cost; log replay updates separately.
+7. **Categorical CEM.** Treat complete deterministic policies as the search objects and count every rollout used to score a candidate.
 
 The proposed particle method participates in every learned-method stage. For it, additionally log particle count, horizon, sweep count, effective sample size, resampling events, weight entropy, unique ancestors, and both logical transitions and actual simulator invocations.
 
@@ -114,13 +119,18 @@ Provisional maximum budgets are:
 
 These maxima are starting points, not promises. Stage 3 timing data should determine whether they fit the available core-hour budget. Train once to the maximum and checkpoint along the way; do not launch a separate job for every checkpoint.
 
-For the proposed 360-run confirmation, these maxima imply about 510 million training transitions:
+For the proposed 540-run confirmation, these maxima imply about 765 million training transitions:
 
-- easy: `3 maps * 10 seeds * 4 methods * 250k = 30M`;
-- medium: `3 * 10 * 4 * 1M = 120M`;
-- hard: `3 * 10 * 4 * 3M = 360M`.
+- easy: `3 maps * 10 seeds * 6 methods * 250k = 45M`;
+- medium: `3 * 10 * 6 * 1M = 180M`;
+- hard: `3 * 10 * 6 * 3M = 540M`.
 
-If measured end-to-end throughput is `q` training transitions per second, the lower-bound CPU time is `510M / q`. For example, the training portion is approximately 708 core-hours at 200 transitions/s, 142 core-hours at 1,000 transitions/s, or 71 core-hours at 2,000 transitions/s, before evaluation and scheduler overhead. Replace these planning examples with measured per-method estimates after Stage 3; never extrapolate one method's speed to another.
+If measured end-to-end throughput is `q` training transitions per second, the
+lower-bound CPU time is `765M / q`. For example, the training portion is about
+1,063 core-hours at 200 transitions/s, 213 core-hours at 1,000 transitions/s,
+or 106 core-hours at 2,000 transitions/s, before evaluation and scheduler
+overhead. Replace these planning examples with measured per-method estimates
+after Stage 3; never extrapolate one method's speed to another.
 
 For each homogeneous job class, set requested wall time to `1.5 * observed p95 runtime + evaluation allowance` and requested memory to `1.25 * observed p95 peak memory`, rounded up to scheduler units. Begin timing pilots with CPU jobs; request accelerators only if a controlled benchmark shows a worthwhile end-to-end speedup at the actual batch sizes.
 
@@ -247,9 +257,17 @@ Split arrays by method, tier, and resource class so that one slow hard job does 
 7. confirmatory arrays after settings are frozen;
 8. aggregation only after the audit declares the manifest complete.
 
-Start with an array concurrency cap of 8. Raise it to 16 or 32 only after confirming that shared storage, logging, and scheduler policy tolerate the I/O pattern. Keep CPU thread counts equal to allocated CPUs to avoid hidden oversubscription. Use a preemption signal with enough notice to write a checkpoint, and test checkpoint resume before relying on it.
+Start with an array concurrency cap of 2--4. Raise it only after confirming that
+shared storage, logging, and scheduler policy tolerate the I/O pattern. Keep CPU
+thread counts equal to allocated CPUs to avoid hidden oversubscription. Use a
+preemption signal with enough notice to write a checkpoint, and test checkpoint
+resume before relying on it.
 
-Suggested provisional requests for the first timing run are 2 CPUs, 4–8 GB RAM, and 30 minutes for easy jobs; 2 CPUs, 8 GB, and 2 hours for medium/hard learning jobs. These are deliberately conservative placeholders and must be replaced by the measured p95 rule above. Partition names, quotas, and maximum wall times should be detected or confirmed rather than assumed.
+The first measured medium pilots used one effective CPU core and under 300 MB
+RAM. Current array rows therefore request the cluster minimum allocation with
+2 GB RAM and 2 GB local scratch on the `main` CPU partition. Recompute requests
+from the observed p95 for each final job class instead of copying these pilot
+values to hard or extension domains.
 
 ### Preflight and audit checks
 

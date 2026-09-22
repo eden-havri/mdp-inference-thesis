@@ -1,25 +1,48 @@
 \DocSection{Exact Validation Framework}
 \label{sec:validation}
 
-The method is validated first on finite MDPs for which every deterministic
-policy can be enumerated. For each policy \(\policy\), finite-horizon dynamic
-programming computes \(\ExpectedReturn_H(\policy)\). Log-sum-exp normalization
-then gives the exact partition function, policy probabilities, and action
-marginals in Equation~\eqref{eq:policy-target}.
+Correct implementation of an MCMC transition does not establish that the
+intended density was specified.  Validation therefore starts with finite MDPs
+for which all \(|\mathcal A|^D\) stationary deterministic policies can be
+enumerated, where \(D\) is the number of decision states.  Finite-horizon
+dynamic programming computes \(\ExpectedReturn_H(\policy)\) for every policy,
+and log-sum-exp normalization gives the exact target probabilities, partition
+function, and action marginals in Equation~\eqref{eq:policy-target}.
+
+\DocSubsection{Target-substitution diagnostic}
 
 The smallest diagnostic contains two policies with equal expected return but
-different return variance. The target in Equation~\eqref{eq:policy-target}
-assigns them equal probability under a uniform reference measure. A method
-that instead uses the right-hand side of Equation~\eqref{eq:order-matters}
-prefers the variable policy. This is a deterministic pass-or-fail test of the
-order of operations.
+different return variance.  Under a uniform reference measure,
+Equation~\eqref{eq:policy-target} assigns them equal probability.  A method
+that averages \(\exp(\beta\Return_H)\) instead assigns more mass to the
+variable policy.  This is a deterministic pass-or-fail test of the order of
+operations rather than a performance benchmark.
 
-Further diagnostics test state revisitation, absorbing states, policy
-memoization, particle ancestry, common random numbers, and exact gradients.
-No cluster-scale experiment is run until:
-\begin{itemize}
-  \item transition kernels and rewards pass deterministic unit tests;
-  \item direct-objective gradients agree with exhaustive differentiation;
-  \item particle marginals agree with the exact finite-sample target; and
-  \item increasing the number of simulator tapes reduces expected target error.
-\end{itemize}
+Additional exact tests cover state revisitation, absorbing states, finite
+horizons, policy memoization, common random numbers, Metropolis--Hastings
+proposal ratios, replica swaps, particle ancestry, and score-function
+gradients.  In particular, empirical frequencies of both single-chain and
+replica-exchange samplers must agree with the enumerated target on tiny MDPs.
+
+\DocSubsection{Fail-fast gates}
+
+Experiments advance only after the preceding gate passes:
+\begin{enumerate}[label=G\arabic*.]
+  \item \textbf{Mechanics.} Transition rows, rewards, termination, horizons,
+        seeded replay, artifact writing, and budget counters pass unit tests.
+  \item \textbf{Target.} Enumeration verifies exact probabilities, modes,
+        marginals, local acceptance ratios, and swap acceptance ratios.
+  \item \textbf{Approximation.} Increasing the immutable tape-bank size
+        reduces sample-average target error on repeated small problems; a
+        failure stops simulator-only scaling.
+  \item \textbf{Mixing.} One-seed medium pilots show finite outputs, adequate
+        cold-chain effective sample size, and exchange across every ladder
+        edge.  A high local acceptance rate alone is not sufficient.
+  \item \textbf{Cost.} Three short runs establish memory, wall-clock time, and
+        value-evaluation or simulator-step rates before a large job array is
+        submitted.
+\end{enumerate}
+
+The final thresholds for effective sample size and target error are frozen
+after pilot calibration and before confirmatory seeds are inspected.  Failed,
+timed-out, and numerically invalid runs remain in the accounting.

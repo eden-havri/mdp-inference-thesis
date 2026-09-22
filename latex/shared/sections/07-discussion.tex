@@ -1,22 +1,50 @@
 \DocSection{Discussion and Limitations}
 \label{sec:discussion}
 
-The corrected formulation preserves expected-return ordering at the level of
-target modes. A finite-temperature draw is nevertheless not an
-expected-return-optimal policy in the classical sense; it is a randomized
-selection rule whose behavior depends on \(\beta\) and the reference measure.
-Those modeling choices must be stated rather than described as data-driven
-epistemic uncertainty.
+The target in Equation~\eqref{eq:policy-target} has a useful property: with a
+uniform reference measure, its modes preserve ordinary expected-return
+optimality.  A finite-temperature draw is nevertheless not a classical optimal
+policy.  It is a randomized selection rule controlled by \(\beta\) and
+\(\mu\).  The resulting spread should not be described as calibrated epistemic
+uncertainty about an unknown environment.
 
-The direct objective in Equation~\eqref{eq:correct-elbo} avoids a nonlinear
-transformation of a noisy log density, but it can still have high gradient
-variance and a restrictive variational family. A factorized statewise proposal
-cannot represent correlations between alternative policy modes. Structured
-global latent variables, autoregressive assignments, or retained weighted
-policy particles are possible extensions, provided their objectives continue
-to target Equation~\eqref{eq:policy-target}.
+Replica exchange corrects neither a misspecified target nor poor finite-run
+mixing.  Local state changes can leave high-dimensional policy modes separated
+by low-value barriers, a PPO guide can be overconfident in one region, and a
+temperature ladder can have a bottleneck near the cold chain.  Exact Hastings
+correction guarantees invariance, not useful effective sample size.  Swap rates
+on every edge, multiple dispersed chains, policy-coordinate diagnostics, and
+explicit nonconvergence decisions are therefore part of the method rather than
+optional presentation details.
 
-Finally, simulator access makes the method a form of planning with a generative
-model. It should not be described as model-free merely because transition
-probabilities are never enumerated.
+The two evaluation modes have different claims.  Dynamic programming gives an
+exact target but requires the model.  Fixed-tape sample-average inference needs
+only a generative simulator, but its finite-\(K\) target differs from the
+scientific target and may require many rollouts when \(\beta\) is large.  It is
+therefore more accurate to call the overall approach simulator-based planning
+than model-free reinforcement learning.  Constructing an exact simulator-only
+pseudo-marginal method would require a nonnegative unbiased estimator of
+\(\exp(\beta J)\), not merely an unbiased estimator of \(J\).
 
+The direct ELBO avoids exponentiating a noisy value estimate, but its
+score-function gradient can have high variance and a factorized variational
+family cannot represent correlations between policy modes.  Replicated SMC can
+retain a multimodal weighted population, yet it is vulnerable to particle
+degeneracy and must copy every memoized assignment and simulator replica during
+resampling.
+
+All present learned policies are stationary in physical state.  This keeps the
+comparison consistent but aliases time-to-go in recurrent finite-horizon
+states.  PPO uses Monte Carlo rather than generalized-advantage estimates and
+does not use value clipping; discrete SAC fixes its entropy temperature; and
+the tabular critics in SAC and Double Q-learning are not time-indexed.  These
+are precise implemented variants, not claims of reproducing every enhancement
+of the algorithm families.  GridWorld currently uses \(\gamma=1\), and the
+guard against unvalidated discounted runs must remain until the gradient and
+target semantics are tested.
+
+Finally, GridWorld supports controlled correctness and scaling experiments but
+cannot establish broad generality.  Blackjack is a low-cost nonspatial check.
+Tireworld would add structured stochastic failure at higher implementation
+cost.  Factored concurrent-action and continuous-control domains require new
+policy representations and reference measures and are left to future work.

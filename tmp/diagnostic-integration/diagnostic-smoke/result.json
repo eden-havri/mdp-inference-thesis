@@ -1,0 +1,128 @@
+{
+  "method": "ppo_policy_tempering",
+  "random_marginal_value": -1.3984189670480314,
+  "random_committed_value": -2.3431617300276413,
+  "random_committed_value_std": 0.1947176733606105,
+  "random_committed_value_se": 0.02433970917007631,
+  "random_marginal_goal_probability": 0.176301595330358,
+  "random_committed_goal_probability": 0.01004754130194556,
+  "random_committed_goal_probability_std": 0.034124187629406014,
+  "random_committed_goal_probability_se": 0.004265523453675752,
+  "transition_budget": 256,
+  "transition_budget_semantics": "minimum_counted_training_transitions",
+  "evaluation_policy_samples": 64,
+  "transition_model_kind": "fixed_branch",
+  "transition_storage_bytes": 4608,
+  "ppo_count_bonus": 0.0,
+  "goal_probability_event": "hit_any_goal_at_or_before_horizon",
+  "goal_probability_horizon": 24,
+  "value": 4.2946628600054355,
+  "marginal_action_value": 4.311106029122495,
+  "committed_policy_value": 4.2946628600054355,
+  "committed_policy_value_std": 0.06040065114107579,
+  "committed_policy_value_se": 0.02297395669079088,
+  "map_policy_value": 4.322589668325519,
+  "marginal_map_policy_value": 4.318219555155539,
+  "proposal_marginal_action_value": -1.163778705865409,
+  "proposal_committed_policy_value": -2.1489646976828265,
+  "proposal_committed_policy_value_std": 0.8125947962715725,
+  "proposal_map_policy_value": 1.5065136262732015,
+  "mcmc_target": "exact_expected_return",
+  "mcmc_tapes": 0,
+  "mcmc_iterations": 80,
+  "mcmc_burn_in": 20,
+  "mcmc_thinning": 4,
+  "mcmc_samples": 15,
+  "mcmc_temperatures": 4,
+  "mcmc_prior_initialize_hot_replicas": false,
+  "mcmc_beta_ladder": [
+    0.0,
+    0.4444444444444444,
+    1.7777777777777777,
+    4.0
+  ],
+  "mcmc_local_acceptance_rates": [
+    0.975,
+    0.9375,
+    0.5875,
+    0.5
+  ],
+  "mcmc_swap_acceptance_rates": [
+    0.9,
+    0.15,
+    0.075
+  ],
+  "mcmc_target_return_ess": 6.9121259797004155,
+  "mcmc_exact_return_ess": 6.9121259797004155,
+  "mcmc_policy_occupancy_ess": 0.0,
+  "mcmc_policy_occupancy_ess_quantiles": [
+    0.0,
+    0.0,
+    0.0,
+    7.641038609080674,
+    15.0
+  ],
+  "mcmc_states_without_action_switches": 7,
+  "mcmc_min_state_action_switch_rate": 0.0,
+  "mcmc_mean_state_action_switch_rate": 0.12637362637362637,
+  "mcmc_unique_policy_samples": 13,
+  "mcmc_unique_policy_fraction": 0.8666666666666667,
+  "mcmc_mean_policy_hamming_jump": 0.12637362637362637,
+  "mcmc_walker_temperature_visit_fractions": [
+    [
+      0.0,
+      0.03333333333333333,
+      0.9666666666666667,
+      0.0
+    ],
+    [
+      0.5,
+      0.5,
+      0.0,
+      0.0
+    ],
+    [
+      0.5,
+      0.4666666666666667,
+      0.03333333333333333,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "mcmc_walker_endpoint_transitions": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "mcmc_walker_round_trips": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "mcmc_total_round_trips": 0,
+  "mcmc_cold_walker_count": 1,
+  "mcmc_value_evaluations": 324,
+  "mcmc_simulator_steps": 0,
+  "mcmc_elapsed_seconds": 0.12797951698303223,
+  "training_simulator_steps": 268,
+  "simulator_steps": 268,
+  "oracle_value": 4.332131965268031,
+  "oracle_goal_probability": 0.9999999971944384,
+  "marginal_action_goal_probability": 0.998600767451,
+  "map_policy_goal_probability": 0.999582372066443,
+  "committed_policy_goal_probability": 0.9964969500837513,
+  "committed_policy_goal_probability_std": 0.007217271095775445,
+  "goal_reaching_probability": 0.9964969500837513,
+  "goal_reaching_probability_semantics": "policy_sample_then_commit",
+  "primary_value_semantics": "policy_sample_then_commit",
+  "elapsed_seconds": 2.4408118724823,
+  "policy_probabilities_artifact": "policy_probabilities.npy",
+  "policy_particles_artifact": "policy_particles.npy"
+}

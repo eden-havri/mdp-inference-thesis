@@ -9,20 +9,42 @@ single realized return before averaging is generally not equivalent to
 exponentiating the expected return.
 
 This manuscript develops a policy-inference formulation in which the target is
-defined before an approximation algorithm is chosen. The target assigns mass
-to complete deterministic policies according to expected return. Its modes are
-therefore expected-return maximizers, while a finite inverse temperature
-retains a distribution over alternatives. The corrected inference method uses
-rollouts only through estimators that are valid for that target.
+defined before an approximation algorithm is chosen.  The target assigns mass
+to complete deterministic policies according to expected return.  Its modes
+are therefore expected-return maximizers, while a finite inverse temperature
+retains a distribution over alternatives.  The construction is a generalized
+Gibbs posterior over decisions, not a posterior belief about unknown transition
+parameters.  Related free-utility formulations also trade expected utility
+against information cost \citep{ortegaBraun2011}, and recent general Bayesian
+policy learning updates distributions over decision rules from a loss
+\citep{kato2026}.  Our setting differs by targeting finite-horizon MDP policies
+and by making the expected-return order of operations explicit.
 
-The study has four goals:
+Control-as-inference methods provide a broad connection between optimal
+control and probabilistic inference \citep{levine2018}.  In stochastic
+dynamics, however, the choice of graphical model and optimality likelihood
+determines whether the resulting objective is risk-neutral, risk-sensitive, or
+maximum-entropy.  We therefore do not treat ``inference'' as sufficient to
+identify the control objective.
+
+The study makes five contributions:
 \begin{enumerate}
-  \item specify the expected-return policy distribution and its assumptions;
-  \item construct exact diagnostic oracles that detect target substitution;
-  \item derive direct and particle estimators with a consistent execution rule; and
-  \item compare target fidelity, control performance, and computational cost
-        under matched experimental conditions.
+  \item It specifies an expected-return Gibbs measure over complete policies,
+        including its reference measure, temperature, and execution semantics.
+  \item It gives exact finite-policy oracles and variance-sensitive diagnostics
+        that detect substitution of an exponentiated-trajectory objective.
+  \item It introduces guided replica-exchange policy MCMC whose PPO guide is
+        fully corrected by Metropolis--Hastings and therefore affects mixing,
+        not the invariant target.
+  \item It separates exact model evaluation from a fixed-tape simulator
+        approximation, and retains direct variational and replicated SMC
+        alternatives as controlled ablations.
+  \item It defines a fail-fast comparison against five published algorithmic
+        families with common policy-commitment semantics and full cost
+        accounting.
 \end{enumerate}
 
 Agreement with exact enumeration establishes target correctness before any
-large-scale performance comparison is attempted.
+large-scale performance comparison is attempted.  The experimental protocol is
+specified before confirmatory results; this draft labels incomplete empirical
+claims as preliminary or to be determined.

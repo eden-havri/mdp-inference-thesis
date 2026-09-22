@@ -245,17 +245,81 @@ class DiscreteSACConfig:
     log_every: int = 1_000
 
 
+def _discrete_sac_td_targets(
+    actor_logits: torch.Tensor,
+    target_q1: torch.Tensor,
+    target_q2: torch.Tensor,
+    next_times: torch.Tensor,
+    next_states: torch.Tensor,
+    rewards: torch.Tensor,
+    dones: torch.Tensor,
+    gamma: float,
+    alpha: float,
+) -> torch.Tensor:
+    """Return finite-horizon categorical-SAC Bellman targets.
+
+    The physical-state actor is stationary, but target critics have shape
+    ``[H, S, A]``.  A transition at time ``t`` therefore bootstraps from the
+    ``t + 1`` critic slice.  Terminal transitions do not bootstrap, including
+    the horizon boundary where ``next_time == H``.
+    """
+
+    if target_q1.ndim != 3 or target_q2.shape != target_q1.shape:
+        raise ValueError("target critics must have matching shape [H, S, A]")
+    if actor_logits.shape != target_q1.shape[1:]:
+        raise ValueError("actor logits must have shape [S, A]")
+    batch_shape = rewards.shape
+    if any(
+        tensor.shape != batch_shape
+        for tensor in (next_times, next_states, dones)
+    ):
+        raise ValueError("SAC transition tensors must have matching shapes")
+
+    dones_bool = dones.to(dtype=torch.bool)
+    continuation = ~dones_bool
+    if torch.any(next_times[continuation] >= target_q1.shape[0]) or torch.any(
+        next_times[continuation] < 0
+    ):
+        raise ValueError("nonterminal SAC transition is outside the finite horizon")
+
+    targets = rewards.clone()
+    if torch.any(continuation):
+        continuing_times = next_times[continuation]
+        continuing_states = next_states[continuation]
+        next_log_probs = torch.log_softmax(actor_logits[continuing_states], dim=-1)
+        next_probs = torch.softmax(actor_logits[continuing_states], dim=-1)
+        next_min_q = torch.minimum(
+            target_q1[continuing_times, continuing_states],
+            target_q2[continuing_times, continuing_states],
+        )
+        next_v = torch.sum(
+            next_probs * (next_min_q - alpha * next_log_probs), dim=-1
+        )
+        targets[continuation] += gamma * next_v
+    return targets
+
+
 def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> BaselineResult:
     rng = np.random.default_rng(config.seed)
     torch.manual_seed(config.seed)
     actor_logits = nn.Parameter(torch.zeros((mdp.num_states, mdp.num_actions), dtype=torch.float64))
-    q1 = nn.Parameter(torch.zeros((mdp.num_states, mdp.num_actions), dtype=torch.float64))
-    q2 = nn.Parameter(torch.zeros((mdp.num_states, mdp.num_actions), dtype=torch.float64))
+    # The actor intentionally remains a stationary physical-state policy, as
+    # required by the common policy class.  The critics must still distinguish
+    # the same physical state reached with different time remaining: those
+    # continuation values are generally different in a finite-horizon MDP.
+    q1 = nn.Parameter(
+        torch.zeros((mdp.horizon, mdp.num_states, mdp.num_actions), dtype=torch.float64)
+    )
+    q2 = nn.Parameter(
+        torch.zeros((mdp.horizon, mdp.num_states, mdp.num_actions), dtype=torch.float64)
+    )
     target_q1 = q1.detach().clone()
     target_q2 = q2.detach().clone()
     actor_optimizer = torch.optim.Adam([actor_logits], lr=config.learning_rate)
     critic_optimizer = torch.optim.Adam([q1, q2], lr=config.learning_rate)
-    replay: deque[tuple[int, int, float, int, bool]] = deque(maxlen=config.replay_capacity)
+    replay: deque[tuple[int, int, int, float, int, bool]] = deque(
+        maxlen=config.replay_capacity
+    )
     transitions = 0
     history: list[dict[str, float]] = []
     episode_returns: list[float] = []
@@ -266,30 +330,43 @@ def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> Base
         probabilities = _full_policy_probabilities(actor_logits)
         episode = simulate_episode(mdp, lambda state: probabilities[state], rng)
         episode_returns.append(episode.total_return)
-        for state, action, reward, next_state, done in zip(
-            episode.states, episode.actions, episode.rewards, episode.next_states, episode.dones
+        for time, (state, action, reward, next_state, done) in enumerate(
+            zip(
+                episode.states,
+                episode.actions,
+                episode.rewards,
+                episode.next_states,
+                episode.dones,
+            )
         ):
-            replay.append((int(state), int(action), float(reward), int(next_state), bool(done)))
+            replay.append(
+                (time, int(state), int(action), float(reward), int(next_state), bool(done))
+            )
             transitions += 1
             if transitions >= config.learning_starts and len(replay) >= config.batch_size:
                 for _ in range(config.updates_per_transition):
                     indices = rng.integers(0, len(replay), size=config.batch_size)
                     batch = [replay[int(index)] for index in indices]
-                    states_t = torch.as_tensor([x[0] for x in batch], dtype=torch.long)
-                    actions_t = torch.as_tensor([x[1] for x in batch], dtype=torch.long)
-                    rewards_t = torch.as_tensor([x[2] for x in batch], dtype=torch.float64)
-                    next_states_t = torch.as_tensor([x[3] for x in batch], dtype=torch.long)
-                    dones_t = torch.as_tensor([x[4] for x in batch], dtype=torch.float64)
+                    times_t = torch.as_tensor([x[0] for x in batch], dtype=torch.long)
+                    states_t = torch.as_tensor([x[1] for x in batch], dtype=torch.long)
+                    actions_t = torch.as_tensor([x[2] for x in batch], dtype=torch.long)
+                    rewards_t = torch.as_tensor([x[3] for x in batch], dtype=torch.float64)
+                    next_states_t = torch.as_tensor([x[4] for x in batch], dtype=torch.long)
+                    dones_t = torch.as_tensor([x[5] for x in batch], dtype=torch.bool)
                     with torch.no_grad():
-                        next_log_probs = torch.log_softmax(actor_logits[next_states_t], dim=-1)
-                        next_probs = torch.softmax(actor_logits[next_states_t], dim=-1)
-                        next_min_q = torch.minimum(target_q1[next_states_t], target_q2[next_states_t])
-                        next_v = torch.sum(
-                            next_probs * (next_min_q - config.alpha * next_log_probs), dim=-1
+                        target = _discrete_sac_td_targets(
+                            actor_logits=actor_logits,
+                            target_q1=target_q1,
+                            target_q2=target_q2,
+                            next_times=times_t + 1,
+                            next_states=next_states_t,
+                            rewards=rewards_t,
+                            dones=dones_t,
+                            gamma=mdp.gamma,
+                            alpha=config.alpha,
                         )
-                        target = rewards_t + mdp.gamma * (1.0 - dones_t) * next_v
-                    q1_selected = q1[states_t].gather(1, actions_t[:, None]).squeeze(1)
-                    q2_selected = q2[states_t].gather(1, actions_t[:, None]).squeeze(1)
+                    q1_selected = q1[times_t, states_t, actions_t]
+                    q2_selected = q2[times_t, states_t, actions_t]
                     q_loss = torch.mean((q1_selected - target) ** 2 + (q2_selected - target) ** 2)
                     critic_optimizer.zero_grad()
                     q_loss.backward()
@@ -297,7 +374,9 @@ def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> Base
 
                     log_probs = torch.log_softmax(actor_logits[states_t], dim=-1)
                     probs = torch.softmax(actor_logits[states_t], dim=-1)
-                    min_q = torch.minimum(q1[states_t], q2[states_t]).detach()
+                    min_q = torch.minimum(
+                        q1[times_t, states_t], q2[times_t, states_t]
+                    ).detach()
                     actor_loss = torch.sum(probs * (config.alpha * log_probs - min_q), dim=-1).mean()
                     actor_optimizer.zero_grad()
                     actor_loss.backward()
@@ -541,11 +620,27 @@ def _double_q_td_target(
     done: bool,
     gamma: float,
     rng: np.random.Generator,
+    next_time: int | None = None,
 ) -> float:
     if done:
         return float(reward)
-    next_action = _random_argmax(selection_q[next_state], rng)
-    return float(reward + gamma * evaluation_q[next_state, next_action])
+    if selection_q.shape != evaluation_q.shape:
+        raise ValueError("Double Q tables must have matching shapes")
+    if selection_q.ndim == 3:
+        if next_time is None:
+            raise ValueError("next_time is required for finite-horizon Double Q tables")
+        if next_time < 0 or next_time >= selection_q.shape[0]:
+            raise ValueError("nonterminal Double Q transition is outside the finite horizon")
+        selection_row = selection_q[next_time, next_state]
+        evaluation_row = evaluation_q[next_time, next_state]
+    elif selection_q.ndim == 2:
+        # Retain the small helper's state-only form for direct analytic tests.
+        selection_row = selection_q[next_state]
+        evaluation_row = evaluation_q[next_state]
+    else:
+        raise ValueError("Double Q tables must have shape [S, A] or [H, S, A]")
+    next_action = _random_argmax(selection_row, rng)
+    return float(reward + gamma * evaluation_row[next_action])
 
 
 def _epsilon_at_transition(config: DoubleQConfig, transitions: int) -> float:
@@ -563,15 +658,35 @@ def _greedy_q_probabilities(q_values: np.ndarray) -> np.ndarray:
     return maximizers / maximizers.sum(axis=1, keepdims=True)
 
 
+def _stationary_double_q_projection(
+    q_values: np.ndarray,
+    state_time_visits: np.ndarray,
+) -> np.ndarray:
+    """Project time-indexed Double Q values into the shared stationary class.
+
+    Each state's time slices are weighted by how often that state was observed
+    at that time during training.  Unvisited states retain the usual uniform
+    tie among their zero-initialized actions.
+    """
+
+    if q_values.ndim != 3:
+        raise ValueError("time-indexed Q values must have shape [H, S, A]")
+    if state_time_visits.shape != q_values.shape[:2]:
+        raise ValueError("state-time visit counts must have shape [H, S]")
+    weighted_q = np.sum(q_values * state_time_visits[:, :, None], axis=0)
+    return _greedy_q_probabilities(weighted_q)
+
+
 def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResult:
-    """Train a stationary policy with online tabular Double Q-learning."""
+    """Train finite-horizon tabular Double Q and return a stationary projection."""
 
     _validate_double_q_config(config)
     if float(mdp.initial[~mdp.terminal].sum()) <= 0.0:
         raise RuntimeError("Double Q-learning cannot collect nonterminal transitions")
     rng = np.random.default_rng(config.seed)
-    q1 = np.zeros((mdp.num_states, mdp.num_actions), dtype=np.float64)
+    q1 = np.zeros((mdp.horizon, mdp.num_states, mdp.num_actions), dtype=np.float64)
     q2 = np.zeros_like(q1)
+    state_time_visits = np.zeros((mdp.horizon, mdp.num_states), dtype=np.int64)
     transitions = 0
     history: list[dict[str, float]] = []
     completed_returns: deque[float] = deque(maxlen=100)
@@ -585,11 +700,12 @@ def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResu
         episode_return = 0.0
         discount = 1.0
         for time in range(mdp.horizon):
+            state_time_visits[time, state] += 1
             epsilon = _epsilon_at_transition(config, transitions)
             if rng.random() < epsilon:
                 action = int(rng.integers(mdp.num_actions))
             else:
-                action = _random_argmax(q1[state] + q2[state], rng)
+                action = _random_argmax(q1[time, state] + q2[time, state], rng)
             next_state, reward = mdp.sample_transition(state, action, float(rng.random()))
             done = bool(mdp.terminal[next_state] or time == mdp.horizon - 1)
 
@@ -602,9 +718,10 @@ def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResu
                     done,
                     mdp.gamma,
                     rng,
+                    next_time=time + 1,
                 )
-                last_td_error = target - q1[state, action]
-                q1[state, action] += config.learning_rate * last_td_error
+                last_td_error = target - q1[time, state, action]
+                q1[time, state, action] += config.learning_rate * last_td_error
             else:
                 target = _double_q_td_target(
                     q2,
@@ -614,9 +731,10 @@ def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResu
                     done,
                     mdp.gamma,
                     rng,
+                    next_time=time + 1,
                 )
-                last_td_error = target - q2[state, action]
-                q2[state, action] += config.learning_rate * last_td_error
+                last_td_error = target - q2[time, state, action]
+                q2[time, state, action] += config.learning_rate * last_td_error
 
             episode_return += discount * reward
             discount *= mdp.gamma
@@ -652,4 +770,8 @@ def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResu
         )
     if not np.isfinite(q1).all() or not np.isfinite(q2).all():
         raise FloatingPointError("non-finite value in Double Q-learning")
-    return BaselineResult(_greedy_q_probabilities(q1 + q2), transitions, history)
+    return BaselineResult(
+        _stationary_double_q_projection(q1 + q2, state_time_visits),
+        transitions,
+        history,
+    )

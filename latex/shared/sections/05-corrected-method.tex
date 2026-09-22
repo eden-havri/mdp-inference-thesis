@@ -1,146 +1,180 @@
-\DocSection{Corrected Inference Method}
+\DocSection{Expected-Return Policy Inference}
 \label{sec:corrected-method}
 
-\DocSubsection{Direct stochastic variational objective}
+\DocSubsection{Exact and sample-average policy scores}
 
-Let \(q_\theta\) be a tractable distribution over complete deterministic
-policies. The corrected method maximizes the evidence lower bound implied by
-Equation~\eqref{eq:gibbs-variational}:
-\begin{equation}
-  \mathcal{L}(\theta)
-  = \beta\E_{\policy\sim q_\theta}
-      [\ExpectedReturn_H(\policy)]
-    - \KL(q_\theta\|\mu).
-  \label{eq:correct-elbo}
-\end{equation}
-Sampling \(\policy\sim q_\theta\) and then
-\(\tau\sim p(\cdot\mid\policy)\) gives an unbiased estimator of the
-return term because Equation~\eqref{eq:correct-elbo} is linear in
-\(\ExpectedReturn_H\).
+The sampler uses a score \(\widetilde J(\policy)\).  With an explicit finite
+transition model, \(\widetilde J=\ExpectedReturn_H\) is evaluated exactly by
+dynamic programming.  This variant targets Equation~\eqref{eq:policy-target}
+exactly, but is model-based.
 
-For a score-function estimator, a valid single-sample gradient contribution is
-\begin{equation}
-  \left(
-    \beta\Return_H(\tau)
-    + \log\mu(\policy)
-    - \log q_\theta(\policy)
-    - b
-  \right)
-  \nabla_\theta\log q_\theta(\policy),
-  \label{eq:score-gradient}
-\end{equation}
-where \(b\) is an action-independent control variate. Multiple independent
-rollouts of the same policy may be averaged before applying
-Equation~\eqref{eq:score-gradient}; this reduces variance without changing the
-target.
-
-\DocSubsection{Policy representation and execution}
-
-For a finite tabular policy, actions may be sampled lazily and memoized on the
-first visit to each state. The log proposal probability contains each sampled
-state assignment exactly once. Particle resampling, when used as an auxiliary
-search mechanism, must copy the state, policy memo, visit counters, and any
-other ancestry-dependent state together.
-
-The primary execution rule samples one policy-level object at the beginning of
-an episode and preserves it until termination. A separately named
-\emph{marginal-action} ablation samples from estimated statewise marginals on
-every visit. Comparing these two rules measures the value of policy-level
-correlation instead of assuming it away.
-
-\DocSubsection{Role of common random numbers}
-
-Shared random streams may compare candidate policies under matched transition
-noise. They are treated as a variance-reduction design, not as part of the
-probabilistic target. A correct estimator should converge to the same result
-under shared and independent streams; finite-sample efficiency may differ.
-
-\DocSubsection{Replicated sample-average policy SMC}
-
-For a fixed bank of \(K\) simulator tapes
-\(\Xi_K=(\xi_1,\ldots,\xi_K)\), define
+With simulator-only access, draw an immutable bank of \(K\) random-number
+tapes \(\Xi_K=(\xi_1,\ldots,\xi_K)\) and define
 \begin{equation}
   \widehat J_K(\policy;\Xi_K)
   = \frac{1}{K}\sum_{k=1}^{K}\Return_H(\policy,\xi_k).
   \label{eq:saa-return}
 \end{equation}
-The conditional sample-average target is
+Conditional on that bank, the implemented target is
 \begin{equation}
   P_{\beta,K}(d\policy\mid\Xi_K)
-  \propto \exp\!\left(\beta\widehat J_K(\policy;\Xi_K)\right)
-  \mu(d\policy).
+  \propto
+  \exp\!\left(\beta\widehat J_K(\policy;\Xi_K)\right)\mu(d\policy).
   \label{eq:saa-target}
 \end{equation}
+The same tape bank is reused for every policy evaluation in a chain.  This is
+both common-random-number variance reduction and a definition of the finite-
+sample target.  Refreshing the bank inside an ordinary Metropolis--Hastings
+ratio would generally invalidate detailed balance.  For finite policy spaces
+and bounded returns, \(\widehat J_K\) converges uniformly to \(J\), so
+Equation~\eqref{eq:saa-target} converges to
+Equation~\eqref{eq:policy-target}; finite \(K\) is nevertheless an
+approximation, not an unbiased exact-target construction.
 
-\DocSubsection{Learned full-support proposal}
+\DocSubsection{A learned proposal that cannot change the target}
 
-Let \(m\) denote the assignments already stored in a particle's policy memo,
-and let \(\mathcal A_\mu(s,m)\) be the prior-supported legal actions. A
-stochastic policy \(q_{\mathrm{PPO},\phi}\), trained with PPO, is used as a
-guide rather than as the inference target. With \(u_\mu(\cdot\mid s,m)\)
-uniform on \(\mathcal A_\mu(s,m)\), the actual proposal is
+PPO-Clip \citep{schulman2017} is trained first and then frozen.  Its statewise
+action probabilities guide local moves, but PPO is neither the target nor an
+uncorrected component of the final sampler.  Let
+\(p_\phi(a\mid s)\) be the frozen probabilities and define
 \begin{equation}
-  q_{\epsilon,\phi}(a\mid s,m)
-  =
-  (1-\epsilon)q_{\mathrm{PPO},\phi}(a\mid s,m)
-  + \epsilon u_\mu(a\mid s,m),
-  \qquad 0<\epsilon\leq 1.
-  \label{eq:guided-proposal}
+  g_{\eta,\phi}(a\mid s)
+  = \eta p_\phi(a\mid s)
+    +(1-\eta)\frac{1}{|\mathcal A|},
+  \qquad 0\leq\eta<1.
+  \label{eq:mh-guide}
 \end{equation}
-Both components use the same legal-action mask. Hence every action in the
-target support has proposal probability at least
-\(\epsilon/|\mathcal A_\mu(s,m)|\). The mixture probability in
-Equation~\eqref{eq:guided-proposal}, rather than the unmixed PPO probability,
-is the denominator in every importance ratio.
+The uniform component gives every action positive probability.  If the current
+action is \(a\), a proposed different action \(a'\) has probability
+\begin{equation}
+  q_s(a'\mid a)
+  = \frac{g_{\eta,\phi}(a'\mid s)}
+         {1-g_{\eta,\phi}(a\mid s)},
+  \qquad a'\neq a.
+  \label{eq:forced-different-proposal}
+\end{equation}
+Both the guide snapshot and \(\eta\) are stored with the run.  Setting
+\(\eta=0\) gives the uniform-proposal ablation.
 
-Each particle contains one policy memo and \(K\) environment replicas. Let
-\(U_t\) be the deterministically ordered set of distinct unassigned states
-first exposed by those replicas at simulation step \(t\). One action is drawn
-and memoized for each \(s\in U_t\). The exact incremental log-weight is
+\DocSubsection{Single-site policy Metropolis--Hastings}
+
+One local proposal selects a decision state uniformly, changes only its action
+according to Equation~\eqref{eq:forced-different-proposal}, and leaves all
+other policy entries fixed.  At inverse temperature \(b\), accept
+\(\policy'\) from \(\policy\) with probability
+\begin{equation}
+  \alpha_b(\policy,\policy')
+  = \min\!\left\{1,
+      \exp\!\left[b\{\widetilde J(\policy')-
+                       \widetilde J(\policy)\}\right]
+      \frac{\mu(\policy')}{\mu(\policy)}
+      \frac{q_s(a\mid a')}{q_s(a'\mid a)}
+    \right\}.
+  \label{eq:local-mh}
+\end{equation}
+The state-selection terms cancel.  The experiments use uniform \(\mu\), so
+its ratio is one.  The remaining Hastings ratio is essential because forcing a
+different action makes even a fixed categorical guide asymmetric.  With full
+support, this kernel is irreducible on the finite policy space and satisfies
+detailed balance with the chosen exact or fixed-tape target.
+
+\DocSubsection{Replica exchange across inverse temperatures}
+
+Single-site moves can mix slowly when good complete policies occupy separated
+modes.  Replica exchange, also called parallel tempering, couples chains at
+inverse temperatures
+\begin{equation}
+  0=b_0 < b_1 < \cdots < b_L=\beta,
+  \qquad
+  b_\ell=\beta(\ell/L)^p,
+  \label{eq:temperature-ladder}
+\end{equation}
+where \(p>0\) controls ladder spacing.  Replica \(\ell\) applies the local
+kernel in Equation~\eqref{eq:local-mh} with \(b=b_\ell\).  After a fixed
+number of local sweeps, alternating adjacent pairs propose to exchange their
+complete policies.  For replicas \(i<j\), the swap acceptance probability is
+\begin{equation}
+  \alpha_{i,j}^{\mathrm{swap}}
+  = \min\!\left\{1,
+      \exp\!\left[(b_j-b_i)
+        \{\widetilde J(\policy_i)-\widetilde J(\policy_j)\}\right]
+    \right\}.
+  \label{eq:swap-mh}
+\end{equation}
+This is a Metropolis update for the product of tempered targets
+\(\prod_{\ell=0}^{L}\mu(\policy_\ell)
+\exp(b_\ell\widetilde J(\policy_\ell))\), and hence preserves the desired
+cold marginal at \(b_L=\beta\) \citep{geyer1991}.  The PPO guide affects only
+proposal efficiency; Equations~\eqref{eq:local-mh} and \eqref{eq:swap-mh}
+retain the target.
+
+By default, all replicas start at the PPO statewise mode, while the
+\(b_0=0\) chain is allowed to forget that initializer during burn-in.  A
+separate overdispersed diagnostic initializes hotter replicas from the policy
+prior.  Initialization cannot alter the stationary distribution, but it can
+strongly affect a finite run.  Only thinned post-burn-in draws from the
+\(b_L\) replica are reported as target samples.
+
+\DocSubsection{Diagnostics and cost accounting}
+
+Each run records the beta ladder, local proposals and acceptances, adjacent
+swap proposals and acceptances, retained returns, return effective sample size,
+policy-value evaluations, simulator transitions, PPO training transitions,
+wall-clock time, and software and source hashes.  Return effective sample size
+is necessary but can miss movement between policies with similar value; the
+confirmatory implementation will additionally report policy-coordinate
+mixing and between-chain agreement.  A ladder with no accepted swaps at any
+edge fails the mixing gate even if its cold replica attains high return.
+
+PPO training is part of the proposed method's cost.  Matched-budget comparisons
+therefore include every interaction and optimizer update used to train the
+guide plus all downstream policy evaluations.  Exact dynamic-programming
+evaluations are logged separately because they consume model computations but
+zero simulator transitions.
+
+\DocSubsection{Complementary estimators and ablations}
+
+Two additional estimators test which part of the construction matters.  First,
+for a tractable distribution \(q_\theta\) over complete policies, the direct
+variational objective is
+\begin{equation}
+  \mathcal L(\theta)
+  = \beta\E_{\policy\sim q_\theta}
+      [\ExpectedReturn_H(\policy)]
+    - \KL(q_\theta\|\mu).
+  \label{eq:correct-elbo}
+\end{equation}
+Sampling \(\policy\sim q_\theta\) and then a rollout conditional on that
+same policy gives an unbiased estimator of the return term because it is
+linear in \(J\).  A score-function contribution is
+\begin{equation}
+  \left(\beta\Return_H+\log\mu(\policy)
+        -\log q_\theta(\policy)-c\right)
+  \nabla_\theta\log q_\theta(\policy),
+  \label{eq:score-gradient}
+\end{equation}
+where \(c\) is an action-independent control variate.
+
+Second, replicated policy SMC instantiates each state action once in a lazy
+policy memo and advances \(K\) simulator replicas under that same policy.
+For newly exposed states \(U_t\), its incremental log weight is
 \begin{equation}
   \Delta\log w_t
-  =
-  \frac{\beta}{K}\sum_{k=1}^{K}r_{t,k}
-  +
-  \sum_{s\in U_t}
-  \left[
-    \log\mu(a_s\mid s,m_{<s})
-    -\log q_{\epsilon,\phi}(a_s\mid s,m_{<s})
-  \right].
+  = \frac{\beta}{K}\sum_{k=1}^{K}r_{t,k}
+    +\sum_{s\in U_t}
+      \left[\log\mu(a_s\mid s,m_{<s})
+            -\log q(a_s\mid s,m_{<s})\right].
   \label{eq:guided-weight}
 \end{equation}
-Thus the mean reward is formed before exponentiation, and each prior/proposal
-correction is applied once per newly instantiated policy assignment, not once
-per replica or visit. Revisits reuse the memoized action. Resampling copies all
-replica states, the complete policy memo, and proposal context. No transition
-ratio is required because the conditional target and proposal use the same
-simulator dynamics.
+The mean reward is formed before exponentiation, proposal correction is applied
+once per newly assigned policy entry, revisits reuse the memo, and resampling
+copies the entire ancestry-dependent state.  Sequential Monte Carlo can define
+powerful variational families \citep{naessethEtAl2018} and particle objectives
+\citep{maddisonEtAl2017}, but those results do not by themselves make an
+exponentiated noisy return an unbiased estimator of
+Equation~\eqref{eq:policy-target}.  Here replicated SMC is evaluated against
+the explicitly stated fixed-tape target and against exact enumeration.
 
-The guide is frozen within each SMC sweep, and the parameters, action mask,
-and value of \(\epsilon\) used to generate every proposal are recorded.
-Proposal adaptation between sweeps, if studied, uses a separate frozen
-snapshot for each sweep.
-
-For finite \(K\), Equation~\eqref{eq:saa-target} is an explicit approximation,
-not an unbiased representation of Equation~\eqref{eq:policy-target}. Under
-bounded returns and a finite policy class it converges uniformly as \(K\)
-increases. Experiments therefore report convergence in \(K\) separately from
-convergence in the number of policy particles.
-
-\DocSubsection{Proposal accounting and isolation}
-
-Training \(q_{\mathrm{PPO},\phi}\) is part of the guided method. Matched-budget
-comparisons count all simulator interactions, optimizer updates, wall-clock
-time, accelerator time, and peak memory used to train the proposal as well as
-the later SMC cost. Any amortized accounting is reported only as a separately
-specified multi-instance setting.
-
-The required isolation study includes uniform-proposal SMC
-(\(\epsilon=1\)), corrected guided SMC using
-Equations~\eqref{eq:guided-proposal}--\eqref{eq:guided-weight}, and a
-proposal-alone condition. The proposal-alone condition samples the same lazy,
-memoized deterministic policy from \(q_{\epsilon,\phi}\) but performs no
-importance weighting or resampling. It therefore isolates the contribution of
-SMC from that of the learned guide while preserving policy-commitment
-semantics. These conditions define the evaluation protocol; they do not state
-an empirical outcome.
+The isolation matrix contains uniform-guide MCMC, corrected PPO-guided MCMC,
+PPO alone, direct ELBO, uniform-proposal replicated SMC, and corrected guided
+SMC.  No condition may silently reuse extra simulator interactions.

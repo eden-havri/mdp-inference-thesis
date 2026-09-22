@@ -3,7 +3,7 @@
 
 \paragraph{Gibbs variational identity.}
 Let \(P_\beta\) be the target in Equation~\eqref{eq:policy-target}. For any
-\(Q\ll\mu\), expand
+\(Q\ll\mu\),
 \begin{align}
   \KL(Q\|P_\beta)
   &= \E_Q\left[
@@ -17,8 +17,8 @@ Let \(P_\beta\) be the target in Equation~\eqref{eq:policy-target}. For any
        - \KL(Q\|\mu)
      \right).
 \end{align}
-Non-negativity of the left-hand side yields
-Equation~\eqref{eq:gibbs-variational}, with equality at \(Q=P_\beta\).
+Non-negativity yields Equation~\eqref{eq:gibbs-variational}, with equality at
+\(Q=P_\beta\).
 
 \paragraph{Why a rollout is valid in the direct objective.}
 For \(\policy\sim q_\theta\) and
@@ -28,5 +28,49 @@ For \(\policy\sim q_\theta\) and
   = \E_{\policy\sim q_\theta}
     [\ExpectedReturn_H(\policy)].
 \]
-No exponential or logarithmic transformation is applied between the inner and
-outer expectations.
+No exponential or logarithm is applied between the inner and outer
+expectations.  Applying the score-function identity to
+Equation~\eqref{eq:correct-elbo}, and dropping terms whose expected score is
+zero, gives Equation~\eqref{eq:score-gradient}.
+
+\paragraph{Local detailed balance.}
+At inverse temperature \(b\), write
+\(\widetilde P_b(\policy)\propto
+\mu(\policy)\exp(b\widetilde J(\policy))\).  The Metropolis--Hastings ratio is
+\[
+  \frac{\widetilde P_b(\policy')q(\policy\mid\policy')}
+       {\widetilde P_b(\policy)q(\policy'\mid\policy)}
+  =
+  \exp\!\left[b\{\widetilde J(\policy')-
+                   \widetilde J(\policy)\}\right]
+  \frac{\mu(\policy')}{\mu(\policy)}
+  \frac{q_s(a\mid a')}{q_s(a'\mid a)}.
+\]
+The uniform decision-state selection cancels, producing
+Equation~\eqref{eq:local-mh}.  Full support makes every one-coordinate change
+possible, and a finite sequence of such changes connects any two tabular
+policies.
+
+\paragraph{Replica-swap ratio.}
+Before a swap, the factors for replicas \(i\) and \(j\) are proportional to
+\(
+  \mu(\policy_i)\exp(b_i\widetilde J(\policy_i))
+  \mu(\policy_j)\exp(b_j\widetilde J(\policy_j))
+\).
+After exchanging the two policies, the reference-measure factors cancel and
+the new-to-old density ratio is
+\[
+  \exp\!\left[(b_j-b_i)
+    \{\widetilde J(\policy_i)-\widetilde J(\policy_j)\}\right],
+\]
+which gives Equation~\eqref{eq:swap-mh}.  Alternating disjoint adjacent pairs
+changes scheduling efficiency but not this invariant product distribution.
+
+\paragraph{Fixed-tape convergence.}
+For every fixed policy, the strong law gives
+\(\widehat J_K(\policy)\to J(\policy)\) almost surely.  Because the tabular
+policy space is finite, convergence holds simultaneously for all policies.
+Continuity of exponentiation and finite normalization then imply
+\(P_{\beta,K}(\policy\mid\Xi_K)\to P_\beta(\policy)\) for every policy.
+This argument justifies a convergence study in \(K\); it does not make a
+finite tape bank exact for \(P_\beta\).

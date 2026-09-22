@@ -15,6 +15,9 @@ For inverse temperature \(\beta>0\), define the target measure
 Bounded rewards and a finite reference measure make \(Z_\beta\) finite.
 The parameter \(\beta\) carries the inverse units of reward, so a change of
 reward units must be accompanied by the inverse change in \(\beta\).
+The pair \((\mu,\beta)\) is part of the problem specification: neither is
+identified by simulator data alone.  For the tabular experiments, \(\mu\) is
+uniform over complete stationary deterministic policies.
 
 \begin{proposition}[Mode preservation]
 Every mode of \(\Target\) with respect to a uniform finite reference measure
@@ -34,8 +37,10 @@ The order of expectation and exponentiation is essential. In general,
   \label{eq:order-matters}
 \end{equation}
 The right-hand side defines an entropic-risk quantity and places additional
-weight on return variability. It is not an estimator identity for the target
-in Equation~\eqref{eq:policy-target}.
+weight on return variability. By Jensen's inequality it is at least the
+left-hand side for \(\beta>0\), with strict inequality for nonconstant return.
+It is not an estimator identity for the target in
+Equation~\eqref{eq:policy-target}.
 
 The target also has the variational characterization
 \begin{equation}
@@ -50,3 +55,9 @@ The target also has the variational characterization
 Thus the regularization acts on a distribution over complete policies. It is
 not the same as adding independent action entropy at every visited state.
 
+Equation~\eqref{eq:policy-target} may be read as a generalized posterior whose
+loss is \(-\ExpectedReturn_H\).  This interpretation is useful algorithmically,
+but it does not imply epistemic uncertainty calibration or Bayesian learning of
+the MDP.  At \(\beta\to\infty\), mass concentrates on expected-return
+maximizers; at finite \(\beta\), output quality and diversity depend on both the
+temperature and the policy reference measure.
