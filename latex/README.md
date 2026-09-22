@@ -3,13 +3,16 @@
 This directory contains one shared scientific manuscript and two thin output
 wrappers:
 
-- `thesis.tex` builds a compile-safe A4 thesis draft using the standard
-  `report` class.
+- `thesis.tex` builds the bilingual A4 BGU thesis using the 2022 BGU template
+  structure: English cover and approval pages, English front matter, Hebrew
+  contents, Hebrew abstract, and Hebrew cover.
 - `paper.tex` builds a compact article-style submission draft.
 - `shared/` contains all scientific prose, equations, notation, and the
   bibliography database. Scientific content should be edited here, not copied
   between wrappers.
 - `styles/` contains presentation-only settings for the two outputs.
+- `vendor/bgu-template/` contains the attributed BGU logo and bibliography
+  style distributed with the source template.
 - `figures/` is reserved for generated, versioned figures.
 
 ## Build
@@ -21,27 +24,21 @@ latexmk -pdf thesis.tex
 latexmk -pdf paper.tex
 ```
 
-No PDF is committed by this scaffold. The wrappers use standard packages and
-do not depend on a private class file.
+The source is ready for Overleaf with `paper.tex` or `thesis.tex` selected as
+the main file.  The thesis uses pdfLaTeX, matching the source template.
 
-## Integrating an official BGU thesis template
+## BGU template provenance
 
-The repository does not currently contain an authoritative BGU thesis class.
-`thesis.tex` therefore uses `report` with conservative A4 thesis margins and
-front matter. When the official template is obtained from the university:
+The thesis wrapper is adapted from **BGU Thesis Template (New Version 2022)**
+by Ilan Git, downloaded from Overleaf under CC BY 4.0.  The source and license
+are recorded in `vendor/bgu-template/ATTRIBUTION.md`.  Scientific content
+remains in `shared/` and is not duplicated between outputs.
 
-1. Record its source, version, and redistribution terms.
-2. Place authorized class/style/logo assets under `vendor/bgu-template/`.
-3. Change only the `\documentclass` line and the title-page implementation in
-   `thesis.tex` or `styles/thesis-fallback.tex`.
-4. Map the official template's author, advisor, faculty, department, degree,
-   date, English-title, and Hebrew-title commands to the neutral macros in
-   `shared/metadata.tex`.
-5. Keep `shared/manuscript.tex` and every file below `shared/sections/`
-   unchanged. If the official class uses different heading commands, update
-   only `\DocSection`, `\DocSubsection`, and `\DocSubsubsection` in the wrapper.
-6. Add any required Hebrew cover and approval pages as wrapper-only front
-   matter. Do not duplicate scientific chapters.
+Before deposit, confirm the Hebrew spelling of the author and advisor, the
+working Hebrew title translation, faculty, department, degree wording, and
+submission month/year in `shared/metadata.tex`.  The bracketed Hebrew-name and
+date fields are intentionally visible so an unverified draft cannot be
+mistaken for a submission-ready copy.
 
 Before a formal submission, validate page size, binding margin, line spacing,
 title pages, abstract languages, declaration text, advisor wording, and
@@ -60,6 +57,7 @@ budgets, and reporting.
 
 ## Metadata and references
 
-`shared/metadata.tex` contains the confirmed author and advisor names while
-faculty, department, and degree remain placeholders. `shared/references.bib`
-contains the verified primary sources cited by both output wrappers.
+`shared/metadata.tex` contains the confirmed English author and advisor names,
+the current Computer Science/Natural Sciences degree assumptions, and visible
+placeholders for unconfirmed Hebrew names and submission dates.
+`shared/references.bib` contains the primary sources cited by both wrappers.

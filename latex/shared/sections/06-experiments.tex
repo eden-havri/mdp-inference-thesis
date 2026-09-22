@@ -23,7 +23,7 @@ GridWorld passes its medium gates:
   \caption{Domain-extension decision.  Extensions are conditional on the
   primary GridWorld study rather than required to enlarge the result table.}
   \label{tab:domain-scope}
-  \begin{tabular}{@{}p{27mm}p{66mm}p{39mm}@{}}
+  \begin{tabular}{@{}p{25mm}p{62mm}p{35mm}@{}}
     \toprule
     Domain & Added evidence & Decision \\
     \midrule
@@ -61,7 +61,7 @@ variant rather than by a broader software package.
   \caption{Learned competitors.  Uniform random behavior and exact
   finite-horizon dynamic programming are controls, not competitors.}
   \label{tab:competitors}
-  \begin{tabular}{@{}p{27mm}p{65mm}p{38mm}@{}}
+  \begin{tabular}{@{}p{26mm}p{62mm}p{37mm}@{}}
     \toprule
     Reported method & Implemented variant & Role \\
     \midrule
@@ -85,9 +85,10 @@ variant rather than by a broader software package.
 
 The exact control is nonstationary and may use the known model, so it is an
 upper reference rather than a fair learned competitor.  All learned and
-inferred policies use stationary physical-state inputs.  Discrete SAC and
-Double Q-learning therefore share the same time-aliasing limitation as the
-policy-inference methods.
+inferred output policies use stationary physical-state inputs.  For correct
+finite-horizon backup targets, discrete SAC uses time-indexed twin critics and
+replay tuples, while Double Q-learning uses time-indexed tables and projects its
+result into the declared stationary policy class using state--time visitation.
 
 \DocSubsection{Common evaluation semantics}
 
@@ -153,7 +154,7 @@ passes and independent-chain policy mixing is checked.
   \caption{Required confirmatory reporting.  No entry is populated from pilot
   runs.}
   \label{tab:result-matrix}
-  \begin{tabular}{@{}lll@{}}
+  \begin{tabular}{@{}p{25mm}p{42mm}p{55mm}@{}}
     \toprule
     Question & Comparison & Primary report \\
     \midrule

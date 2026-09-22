@@ -207,6 +207,24 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Local experiment/build scratch
+tmp/
+
+# LaTeX build products (deliverable PDFs are copied to output/pdf/)
+latex/*.aux
+latex/*.bbl
+latex/*.blg
+latex/*.fdb_latexmk
+latex/*.fls
+latex/*.lof
+latex/*.log
+latex/*.lot
+latex/*.out
+latex/*.pdf
+latex/*.toc
+latex/*.tocheb
+latex/*.synctex.gz
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

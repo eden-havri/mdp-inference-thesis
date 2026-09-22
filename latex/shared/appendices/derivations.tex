@@ -35,8 +35,11 @@ zero, gives Equation~\eqref{eq:score-gradient}.
 
 \paragraph{Local detailed balance.}
 At inverse temperature \(b\), write
-\(\widetilde P_b(\policy)\propto
-\mu(\policy)\exp(b\widetilde J(\policy))\).  The Metropolis--Hastings ratio is
+\[
+  \widetilde P_b(\policy)\propto
+  \mu(\policy)\exp(b\widetilde J(\policy)).
+\]
+The Metropolis--Hastings ratio is
 \[
   \frac{\widetilde P_b(\policy')q(\policy\mid\policy')}
        {\widetilde P_b(\policy)q(\policy'\mid\policy)}

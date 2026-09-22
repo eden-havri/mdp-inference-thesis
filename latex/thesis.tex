@@ -1,39 +1,67 @@
-\documentclass[12pt,a4paper,oneside]{report}
-
+\documentclass[12pt,a4paper,oneside,onecolumn]{book}
+\usepackage{ucs}
+\usepackage[utf8x]{inputenc}
+\makeatletter\let\l@hebrew\l@nohyphenation\makeatother
+\usepackage[hebrew,english]{babel}
+\usepackage[numbers,sort,compress,square]{natbib}
+\newcommand{\DisableCommonHyperref}{}
 \input{styles/common}
-\input{styles/thesis-fallback}
+\input{styles/bgu-thesis}
 \input{shared/metadata}
 
-\newcommand{\DocSection}[1]{\chapter{#1}}
+\newcommand{\DocSection}[1]{%
+  \chapter{#1}%
+  \ifstrequal{#1}{Introduction}{\BGUAddHebrewChapter{מבוא}}{%
+  \ifstrequal{#1}{Problem Setting and Notation}{\BGUAddHebrewChapter{הגדרת הבעיה וסימון}}{%
+  \ifstrequal{#1}{Expected-Return Policy Target}{\BGUAddHebrewChapter{התפלגות המטרה על מדיניות לפי תוחלת התגמול}}{%
+  \ifstrequal{#1}{Exact Validation Framework}{\BGUAddHebrewChapter{מסגרת אימות מדויקת}}{%
+  \ifstrequal{#1}{Expected-Return Policy Inference}{\BGUAddHebrewChapter{הסקת מדיניות לפי תוחלת התגמול}}{%
+  \ifstrequal{#1}{Experimental Design}{\BGUAddHebrewChapter{תכנון הניסויים}}{%
+  \ifstrequal{#1}{Discussion and Limitations}{\BGUAddHebrewChapter{דיון ומגבלות}}{%
+  \ifstrequal{#1}{Conclusion}{\BGUAddHebrewChapter{סיכום}}{}}}}}}}}%
+}
 \newcommand{\DocSubsection}[1]{\section{#1}}
 \newcommand{\DocSubsubsection}[1]{\subsection{#1}}
 \newcommand{\DocAppendixTitle}[1]{%
-  \chapter*{#1}%
-  \addcontentsline{toc}{chapter}{#1}%
+  \chapter{#1}%
+  \BGUAddHebrewChapter{נגזרות מרכזיות}%
 }
 
 \begin{document}
 
-\MakeFallbackThesisTitle
+\MakeBGUThesisCover
+\MakeBGUThesisTitlePage
 
-\pagenumbering{roman}
-\chapter*{Abstract}
-\addcontentsline{toc}{chapter}{Abstract}
-\input{shared/abstract}
+\frontmatter
+\MakeBGUEnglishAbstract
 
 \clearpage
 \tableofcontents
 
 \clearpage
-\pagenumbering{arabic}
+\BGUAddHebrewUnnumbered{רשימת איורים}
+\listoffigures
+
+\clearpage
+\BGUAddHebrewUnnumbered{רשימת טבלאות}
+\listoftables
+
+\mainmatter
 \input{shared/manuscript}
 
 \appendix
 \input{shared/appendices/derivations}
 
 \clearpage
-\addcontentsline{toc}{chapter}{Bibliography}
-\bibliographystyle{plainnat}
+\BGUAddHebrewUnnumbered{ביבליוגרפיה}
+\bibliographystyle{vendor/bgu-template/unsrtnat_adjusted_for_bgu_thesis}
 \bibliography{shared/references}
+
+\clearpage
+\pagenumbering{gobble}
+\BGUHebrewTableOfContents
+\clearpage
+\input{shared/abstract-hebrew}
+\MakeBGUHebrewCover
 
 \end{document}

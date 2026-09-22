@@ -77,6 +77,7 @@ class ExperimentConfig:
     mcmc_ladder_power: float = 2.0
     mcmc_swap_interval: int = 1
     mcmc_guide_strength: float = 0.5
+    mcmc_lazy_probability: float = 0.05
     mcmc_prior_initialize_hot_replicas: bool = False
 
     @classmethod
@@ -197,6 +198,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
         raise ValueError("invalid policy-tempering ladder")
     if config.mcmc_swap_interval <= 0 or not 0.0 <= config.mcmc_guide_strength < 1.0:
         raise ValueError("invalid policy-tempering swap interval or guide strength")
+    if not 0.0 < config.mcmc_lazy_probability < 1.0:
+        raise ValueError("mcmc_lazy_probability must lie in (0, 1)")
     map_path = Path(config.map_path).resolve()
     spec, map_hash = load_grid_spec(map_path)
     mdp = gridworld_mdp(spec)
@@ -738,6 +741,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     thinning=config.mcmc_thinning,
                     swap_interval=config.mcmc_swap_interval,
                     guide_strength=config.mcmc_guide_strength,
+                    lazy_probability=config.mcmc_lazy_probability,
                     prior_initialize_hot_replicas=(
                         config.mcmc_prior_initialize_hot_replicas
                     ),
@@ -793,6 +797,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     "mcmc_prior_initialize_hot_replicas": (
                         config.mcmc_prior_initialize_hot_replicas
                     ),
+                    "mcmc_lazy_probability": config.mcmc_lazy_probability,
+                    "mcmc_lazy_iterations": chain.lazy_iterations,
                     "mcmc_beta_ladder": chain.betas.tolist(),
                     "mcmc_local_acceptance_rates": chain.local_acceptance_rates.tolist(),
                     "mcmc_swap_acceptance_rates": chain.swap_acceptance_rates.tolist(),

@@ -33,15 +33,17 @@ retain a multimodal weighted population, yet it is vulnerable to particle
 degeneracy and must copy every memoized assignment and simulator replica during
 resampling.
 
-All present learned policies are stationary in physical state.  This keeps the
-comparison consistent but aliases time-to-go in recurrent finite-horizon
-states.  PPO uses Monte Carlo rather than generalized-advantage estimates and
-does not use value clipping; discrete SAC fixes its entropy temperature; and
-the tabular critics in SAC and Double Q-learning are not time-indexed.  These
-are precise implemented variants, not claims of reproducing every enhancement
-of the algorithm families.  GridWorld currently uses \(\gamma=1\), and the
-guard against unvalidated discounted runs must remain until the gradient and
-target semantics are tested.
+All reported learned policies are stationary in physical state.  This keeps the
+output class consistent but prevents any method from representing an action that
+depends explicitly on time-to-go.  PPO uses Monte Carlo rather than
+generalized-advantage estimates and does not use value clipping.  Discrete SAC
+fixes its entropy temperature but uses time-indexed twin critics and replay tuples
+for finite-horizon backups.  Double Q-learning likewise uses time-indexed tables,
+then forms a stationary output by state--time-visitation-weighted projection.
+These are precise implemented variants, not claims of reproducing every
+enhancement of the algorithm families.  GridWorld currently uses \(\gamma=1\),
+and the guard against unvalidated discounted runs must remain until the gradient
+and target semantics are tested.
 
 Finally, GridWorld supports controlled correctness and scaling experiments but
 cannot establish broad generality.  Blackjack is a low-cost nonspatial check.

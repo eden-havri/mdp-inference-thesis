@@ -311,6 +311,10 @@ Treat Tireworld as a preregistered extension, not as a replacement for failed Gr
 
 ## Minimum useful study versus expansion
 
-If time or allocation is tight, the minimum defensible study is the diagnostic exact-policy suite plus two frozen maps per GridWorld tier, five seeds, the proposed method, random, oracle, REINFORCE, PPO, and discrete SAC, all under matched transition budgets. That is sufficient to find correctness failures and estimate effect sizes, but it should be labeled exploratory.
+If time or allocation is tight, the minimum defensible study is the diagnostic
+exact-policy suite plus two frozen maps per GridWorld tier, five seeds, the
+proposed method, all five declared competitors, and the random/oracle controls
+under matched accounting. That is sufficient to find correctness failures and
+estimate effect sizes, but it should be labeled exploratory.
 
 The confirmatory study uses three held-out maps per tier and ten seeds as specified above. Add extra obstacle densities, stochasticity levels, 20 seeds, and Tireworld only in that order and only when the preceding evidence justifies the additional cost.

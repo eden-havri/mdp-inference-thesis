@@ -1,28 +1,26 @@
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage{lmodern}
 \usepackage{amsmath,amssymb,amsthm,mathtools}
 \usepackage{booktabs}
 \usepackage{enumitem}
 \usepackage{graphicx}
 \usepackage{microtype}
-\usepackage[round,authoryear]{natbib}
 \usepackage{xcolor}
-\usepackage{hyperref}
-
-\hypersetup{
-  colorlinks=true,
-  linkcolor=blue!45!black,
-  citecolor=green!35!black,
-  urlcolor=blue!55!black
-}
+\usepackage{xurl}
+\ifdefined\DisableCommonHyperref\else
+  \usepackage{hyperref}
+  \hypersetup{
+    colorlinks=true,
+    linkcolor=blue!45!black,
+    citecolor=green!35!black,
+    urlcolor=blue!55!black
+  }
+\fi
 
 \graphicspath{{figures/}}
 \setlist{nosep}
 
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\Prb}{\mathbb{P}}
-\newcommand{\R}{\mathbb{R}}
+\newcommand{\Reals}{\mathbb{R}}
 \newcommand{\given}{\,\middle|\,}
 \newcommand{\policy}{\pi}
 \newcommand{\PolicySpace}{\Pi}

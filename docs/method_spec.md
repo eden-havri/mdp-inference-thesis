@@ -321,9 +321,16 @@ reference. The exact probability in (RE-6), including its renormalization after
 excluding the current action, must be used in (RE-8). Omitting (RE-8), using the
 unmixed guide, or changing the guide during a run changes the transition kernel
 and invalidates the stated guarantee. With full support, repeated single-site
-moves connect the finite Cartesian policy space. If aperiodicity is not otherwise
-proved for a configured domain, an explicit lazy stay-put step must be added before
-claiming convergence from arbitrary initialization.
+moves connect the finite Cartesian policy space.
+
+The implementation makes a complete local-update-plus-swap sweep lazy. With a
+fixed probability \(0<\delta<1\), it applies the identity kernel to all replicas;
+otherwise it applies the next active replica-exchange sweep. Equivalently,
+\(K_{\delta}=\delta I+(1-\delta)K\). This state-independent mixture preserves the
+product target and supplies a positive self-transition even in a two-action domain,
+where a forced-different local proposal can otherwise be periodic. Swap parity and
+the swap interval advance only on active sweeps. The default \(\delta=0.05\), the
+realized number of lazy sweeps, and all active proposal counts are stored per run.
 
 ### 4.4 Adjacent replica swaps
 
@@ -389,13 +396,15 @@ must be set before confirmatory outcomes are viewed.
 
 ### 4.7 Cost accounting
 
-With \(I\) iterations, the current implementation performs
-\(L(I+1)\) policy-value evaluations: \(L\) initial evaluations and one local
-proposal evaluation per replica per iteration. Swaps reuse cached values and incur
-no additional policy evaluation. In exact-model mode, each evaluation includes one
-finite-horizon dynamic program. In fixed-tape mode, each evaluation uses \(K\)
-rollouts and at most \(KH\) simulator transitions; the exact observed transition
-count is authoritative when episodes can terminate early.
+With \(I\) recorded iterations, \(N_{\mathrm{lazy}}\) realized lazy sweeps, and
+\(L\) temperatures, the current implementation performs
+\(L+L(I-N_{\mathrm{lazy}})\) policy-value evaluations: \(L\) initial evaluations
+and one local proposal evaluation per replica per active sweep. Its expectation is
+\(L+L(1-\delta)I\). Swaps reuse cached values and incur no additional policy
+evaluation. In exact-model mode, each evaluation includes one finite-horizon
+dynamic program. In fixed-tape mode, each evaluation uses \(K\) rollouts and at
+most \(KH\) simulator transitions; the exact observed transition count is
+authoritative when episodes can terminate early.
 
 Every comparison records value evaluations, simulator transitions, guide-training
 transitions, optimizer updates, wall-clock time, CPU/GPU time, peak memory, and

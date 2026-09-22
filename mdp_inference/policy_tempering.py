@@ -20,6 +20,7 @@ class PolicyTemperingConfig:
     thinning: int = 10
     swap_interval: int = 1
     guide_strength: float = 0.5
+    lazy_probability: float = 0.05
     prior_initialize_hot_replicas: bool = False
     seed: int = 0
 
@@ -36,6 +37,7 @@ class PolicyTemperingResult:
     walker_temperature_visits: np.ndarray
     walker_endpoint_transitions: np.ndarray
     walker_round_trips: np.ndarray
+    lazy_iterations: int
     value_evaluations: int
     simulator_steps: int
 
@@ -286,6 +288,8 @@ def run_replica_exchange_policy_mh(
         raise ValueError("thinning must be positive")
     if config.swap_interval <= 0:
         raise ValueError("swap_interval must be positive")
+    if not 0.0 < config.lazy_probability < 1.0:
+        raise ValueError("lazy_probability must lie in (0, 1)")
     if mdp.num_actions < 2 or mdp.num_decisions == 0:
         raise ValueError("policy tempering requires decisions and at least two actions")
     if tapes is not None and tapes.horizon != mdp.horizon:
@@ -354,49 +358,60 @@ def run_replica_exchange_policy_mh(
     walker_last_endpoint = np.full(config.num_temperatures, -1, dtype=np.int8)
     samples: list[np.ndarray] = []
     sample_returns: list[float] = []
+    lazy_iterations = 0
+    active_iterations = 0
 
     for iteration in range(config.iterations):
-        for replica, replica_beta in enumerate(betas):
-            decision = int(rng.integers(mdp.num_decisions))
-            state = int(decision_states[decision])
-            old_action = int(policies[replica, state])
-            row = proposal_probabilities[decision]
-            forward = row.copy()
-            forward[old_action] = 0.0
-            forward /= forward.sum()
-            new_action = int(rng.choice(mdp.num_actions, p=forward))
+        # Mix every complete replica-exchange sweep with the identity kernel.
+        # This gives every augmented chain state a positive self-transition,
+        # including two-action domains where a forced-different proposal can
+        # otherwise be periodic.  The stay decision is independent of state,
+        # so it changes neither the product target nor its cold marginal.
+        if rng.random() < config.lazy_probability:
+            lazy_iterations += 1
+        else:
+            active_iterations += 1
+            for replica, replica_beta in enumerate(betas):
+                decision = int(rng.integers(mdp.num_decisions))
+                state = int(decision_states[decision])
+                old_action = int(policies[replica, state])
+                row = proposal_probabilities[decision]
+                forward = row.copy()
+                forward[old_action] = 0.0
+                forward /= forward.sum()
+                new_action = int(rng.choice(mdp.num_actions, p=forward))
 
-            proposal = policies[replica].copy()
-            proposal[state] = new_action
-            proposed_return = estimate(proposal)
+                proposal = policies[replica].copy()
+                proposal[state] = new_action
+                proposed_return = estimate(proposal)
 
-            reverse_probability = row[old_action] / (1.0 - row[new_action])
-            forward_probability = row[new_action] / (1.0 - row[old_action])
-            log_acceptance = (
-                replica_beta * (proposed_return - returns[replica])
-                + np.log(reverse_probability)
-                - np.log(forward_probability)
-            )
-            local_proposals[replica] += 1
-            if np.log(rng.random()) < min(0.0, float(log_acceptance)):
-                policies[replica] = proposal
-                returns[replica] = proposed_return
-                local_accepts[replica] += 1
-
-        if (iteration + 1) % config.swap_interval == 0:
-            swap_round = (iteration + 1) // config.swap_interval
-            parity = (swap_round - 1) % 2
-            for lower in range(parity, config.num_temperatures - 1, 2):
-                upper = lower + 1
-                log_acceptance = (betas[upper] - betas[lower]) * (
-                    returns[lower] - returns[upper]
+                reverse_probability = row[old_action] / (1.0 - row[new_action])
+                forward_probability = row[new_action] / (1.0 - row[old_action])
+                log_acceptance = (
+                    replica_beta * (proposed_return - returns[replica])
+                    + np.log(reverse_probability)
+                    - np.log(forward_probability)
                 )
-                swap_proposals[lower] += 1
+                local_proposals[replica] += 1
                 if np.log(rng.random()) < min(0.0, float(log_acceptance)):
-                    policies[[lower, upper]] = policies[[upper, lower]]
-                    returns[[lower, upper]] = returns[[upper, lower]]
-                    walker_ids[[lower, upper]] = walker_ids[[upper, lower]]
-                    swap_accepts[lower] += 1
+                    policies[replica] = proposal
+                    returns[replica] = proposed_return
+                    local_accepts[replica] += 1
+
+            if active_iterations % config.swap_interval == 0:
+                swap_round = active_iterations // config.swap_interval
+                parity = (swap_round - 1) % 2
+                for lower in range(parity, config.num_temperatures - 1, 2):
+                    upper = lower + 1
+                    log_acceptance = (betas[upper] - betas[lower]) * (
+                        returns[lower] - returns[upper]
+                    )
+                    swap_proposals[lower] += 1
+                    if np.log(rng.random()) < min(0.0, float(log_acceptance)):
+                        policies[[lower, upper]] = policies[[upper, lower]]
+                        returns[[lower, upper]] = returns[[upper, lower]]
+                        walker_ids[[lower, upper]] = walker_ids[[upper, lower]]
+                        swap_accepts[lower] += 1
 
         if iteration >= config.burn_in:
             walker_temperature_visits[walker_ids, np.arange(config.num_temperatures)] += 1
@@ -428,6 +443,7 @@ def run_replica_exchange_policy_mh(
         walker_temperature_visits=walker_temperature_visits,
         walker_endpoint_transitions=walker_endpoint_transitions,
         walker_round_trips=walker_round_trips,
+        lazy_iterations=lazy_iterations,
         value_evaluations=value_evaluations,
         simulator_steps=simulator_steps,
     )

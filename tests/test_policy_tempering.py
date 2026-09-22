@@ -42,7 +42,9 @@ def test_replica_exchange_matches_exact_policy_marginals() -> None:
         guide_probabilities=guide,
     )
     assert sampled.simulator_steps == 0
-    assert sampled.value_evaluations == 4 + 4 * 30_000
+    assert sampled.lazy_iterations > 0
+    assert np.all(sampled.local_proposals == 30_000 - sampled.lazy_iterations)
+    assert sampled.value_evaluations == 4 + int(sampled.local_proposals.sum())
     assert np.all(sampled.local_acceptance_rates > 0.0)
     assert np.all(sampled.swap_acceptance_rates > 0.0)
     monitored_iterations = 30_000 - 3_000
@@ -71,6 +73,21 @@ def test_tempering_rejects_a_non_full_support_guide_strength() -> None:
             guide_probabilities=np.full(
                 (mdp.num_decisions, mdp.num_actions),
                 1.0 / mdp.num_actions,
+            ),
+        )
+
+
+def test_tempering_requires_a_positive_whole_sweep_lazy_probability() -> None:
+    mdp = two_step_choice_mdp()
+    with pytest.raises(ValueError, match="lazy_probability"):
+        run_replica_exchange_policy_mh(
+            mdp,
+            mdp.policy_from_decisions((0, 0)),
+            PolicyTemperingConfig(
+                num_temperatures=2,
+                iterations=10,
+                burn_in=1,
+                lazy_probability=0.0,
             ),
         )
 
@@ -119,6 +136,7 @@ def test_policy_occupancy_diagnostics_flag_a_stuck_decision_state() -> None:
         walker_temperature_visits=np.asarray([[2, 2], [2, 2]]),
         walker_endpoint_transitions=np.asarray([1, 1]),
         walker_round_trips=np.asarray([0, 0]),
+        lazy_iterations=0,
         value_evaluations=0,
         simulator_steps=0,
     )

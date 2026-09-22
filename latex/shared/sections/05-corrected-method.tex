@@ -78,6 +78,17 @@ different action makes even a fixed categorical guide asymmetric.  With full
 support, this kernel is irreducible on the finite policy space and satisfies
 detailed balance with the chosen exact or fixed-tape target.
 
+Forced-different proposals can be periodic in a two-action domain.  We therefore
+mix every complete local-update-plus-swap sweep with the identity kernel:
+\begin{equation}
+  K_\delta=\delta I+(1-\delta)K, \qquad 0<\delta<1.
+  \label{eq:lazy-sweep}
+\end{equation}
+The stay-put decision is independent of the chain state, so it preserves the
+product target while giving every augmented chain state a positive self-transition.
+The default is \(\delta=0.05\); swap parity advances only on active sweeps, and
+both \(\delta\) and the realized lazy-sweep count are stored with each run.
+
 \DocSubsection{Replica exchange across inverse temperatures}
 
 Single-site moves can mix slowly when good complete policies occupy separated
@@ -102,9 +113,12 @@ complete policies.  For replicas \(i<j\), the swap acceptance probability is
   \label{eq:swap-mh}
 \end{equation}
 This is a Metropolis update for the product of tempered targets
-\(\prod_{\ell=0}^{L}\mu(\policy_\ell)
-\exp(b_\ell\widetilde J(\policy_\ell))\), and hence preserves the desired
-cold marginal at \(b_L=\beta\) \citep{geyer1991}.  The PPO guide affects only
+\[
+  \prod_{\ell=0}^{L}\mu(\policy_\ell)
+  \exp(b_\ell\widetilde J(\policy_\ell)),
+\]
+and hence preserves the desired cold marginal at \(b_L=\beta\)
+\citep{geyer1991}.  The PPO guide affects only
 proposal efficiency; Equations~\eqref{eq:local-mh} and \eqref{eq:swap-mh}
 retain the target.
 
@@ -119,12 +133,19 @@ strongly affect a finite run.  Only thinned post-burn-in draws from the
 
 Each run records the beta ladder, local proposals and acceptances, adjacent
 swap proposals and acceptances, retained returns, return effective sample size,
-policy-value evaluations, simulator transitions, PPO training transitions,
-wall-clock time, and software and source hashes.  Return effective sample size
-is necessary but can miss movement between policies with similar value; the
-confirmatory implementation will additionally report policy-coordinate
-mixing and between-chain agreement.  A ladder with no accepted swaps at any
-edge fails the mixing gate even if its cold replica attains high return.
+policy-value evaluations, lazy sweeps, simulator transitions, PPO training
+transitions, wall-clock time, and software and source hashes.  Return effective
+sample size is necessary but can miss movement between policies with similar
+value.  We therefore also record action-indicator effective sample sizes,
+statewise switch rates, distinct sampled policies, walker temperature visits,
+endpoint transitions, round trips, and the number of walkers reaching the cold
+replica.  Independent warm and overdispersed chains provide the between-chain
+check.  A ladder with an exchange bottleneck or no completed traversal fails the
+mixing gate even if its cold replica attains high return.
+
+For \(I\) recorded iterations, \(N_{\mathrm{lazy}}\) lazy sweeps, and \(L\)
+temperatures, the sampler uses
+\(L+L(I-N_{\mathrm{lazy}})\) policy-value evaluations.  Swaps reuse cached values.
 
 PPO training is part of the proposed method's cost.  Matched-budget comparisons
 therefore include every interaction and optimizer update used to train the
