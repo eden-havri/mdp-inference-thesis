@@ -95,9 +95,9 @@ Single-site moves can mix slowly when good complete policies occupy separated
 modes.  Replica exchange, also called parallel tempering, couples chains at
 inverse temperatures
 \begin{equation}
-  0=b_0 < b_1 < \cdots < b_L=\beta,
+  0=b_0 < b_1 < \cdots < b_{M-1}=\beta,
   \qquad
-  b_\ell=\beta(\ell/L)^p,
+  b_\ell=\beta\{\ell/(M-1)\}^p,
   \label{eq:temperature-ladder}
 \end{equation}
 where \(p>0\) controls ladder spacing.  Replica \(\ell\) applies the local
@@ -114,10 +114,10 @@ complete policies.  For replicas \(i<j\), the swap acceptance probability is
 \end{equation}
 This is a Metropolis update for the product of tempered targets
 \[
-  \prod_{\ell=0}^{L}\mu(\policy_\ell)
+  \prod_{\ell=0}^{M-1}\mu(\policy_\ell)
   \exp(b_\ell\widetilde J(\policy_\ell)),
 \]
-and hence preserves the desired cold marginal at \(b_L=\beta\)
+and hence preserves the desired cold marginal at \(b_{M-1}=\beta\)
 \citep{geyer1991}.  The PPO guide affects only
 proposal efficiency; Equations~\eqref{eq:local-mh} and \eqref{eq:swap-mh}
 retain the target.
@@ -127,7 +127,7 @@ By default, all replicas start at the PPO statewise mode, while the
 separate overdispersed diagnostic initializes hotter replicas from the policy
 prior.  Initialization cannot alter the stationary distribution, but it can
 strongly affect a finite run.  Only thinned post-burn-in draws from the
-\(b_L\) replica are reported as target samples.
+\(b_{M-1}\) replica are reported as target samples.
 
 \DocSubsection{Diagnostics and cost accounting}
 
@@ -143,9 +143,9 @@ replica.  Independent warm and overdispersed chains provide the between-chain
 check.  A ladder with an exchange bottleneck or no completed traversal fails the
 mixing gate even if its cold replica attains high return.
 
-For \(I\) recorded iterations, \(N_{\mathrm{lazy}}\) lazy sweeps, and \(L\)
+For \(I\) total iterations, \(N_{\mathrm{lazy}}\) lazy sweeps, and \(M\)
 temperatures, the sampler uses
-\(L+L(I-N_{\mathrm{lazy}})\) policy-value evaluations.  Swaps reuse cached values.
+\(M+M(I-N_{\mathrm{lazy}})\) policy-value evaluations.  Swaps reuse cached values.
 
 PPO training is part of the proposed method's cost.  Matched-budget comparisons
 therefore include every interaction and optimizer update used to train the

@@ -11,6 +11,13 @@ sample-average target under simulator access.  Full-support guidance can
 improve proposals without changing either target because every local move is
 Hastings-corrected.
 
+Bounded returns also yield a nonnegative unbiased Poisson weight for an exact
+simulator-only pseudo-marginal extension.  Its explicit relative-variance
+formula shows why mathematical exactness alone is insufficient: at large
+inverse temperature it may require prohibitive rollout counts.  It is therefore
+a gated extension, not a substitute for reporting the finite-tape approximation
+honestly.
+
 The empirical claim remains deliberately narrower than the mathematical one.
 Exact tiny-domain agreement is established before scaling, and medium pilots
 must demonstrate mixing and acceptable cost before any confirmatory comparison.

@@ -14,7 +14,8 @@ and replicated sequential Monte Carlo estimators provide complementary
 ablations.  Evaluation samples one complete policy and commits to it for the
 episode, and compares against precisely specified REINFORCE, PPO-Clip, discrete
 SAC, categorical cross-entropy search, and Double Q-learning baselines under
-matched interaction and compute accounting.  Exact finite-policy gates precede
+matched simulator access and compute accounting in a separate information
+stratum.  Exact finite-policy gates precede
 larger stochastic GridWorld experiments.  Confirmatory empirical results are
 not yet claimed in this draft; medium-scale mixing and cost gates remain in
 progress.

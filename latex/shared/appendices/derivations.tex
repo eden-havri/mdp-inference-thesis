@@ -77,3 +77,45 @@ Continuity of exponentiation and finite normalization then imply
 \(P_{\beta,K}(\policy\mid\Xi_K)\to P_\beta(\policy)\) for every policy.
 This argument justifies a convergence study in \(K\); it does not make a
 finite tape bank exact for \(P_\beta\).
+
+\paragraph{A nonnegative unbiased policy weight from bounded rollouts.}
+Suppose a simulator return satisfies \(G_\policy\geq a\) almost surely, where
+the finite-horizon reward specification supplies the known constant \(a\).
+For \(\lambda>0\), draw \(N\sim\operatorname{Poisson}(\lambda)\) and, conditional
+on \(N\), independent returns \(G_{\policy,1},\ldots,G_{\policy,N}\).  Define
+\begin{equation}
+  \widehat W_{\lambda}(\policy)
+  = \exp(\beta a)
+    \prod_{i=1}^{N}
+      \left(1+\frac{\beta(G_{\policy,i}-a)}{\lambda}\right).
+  \label{eq:poisson-policy-weight}
+\end{equation}
+Every factor is nonnegative.  Conditioning first on \(N\), then using the
+probability generating function of a Poisson variable, gives
+\begin{align}
+  \E[\widehat W_{\lambda}(\policy)]
+  &= \exp(\beta a)\,
+     \E_N\!\left[
+       \left(1+\frac{\beta(J(\policy)-a)}{\lambda}\right)^N
+     \right] \\
+  &= \exp(\beta a)\exp(\beta(J(\policy)-a))
+   = \exp(\beta J(\policy)).
+\end{align}
+Thus a pseudo-marginal Metropolis--Hastings chain on the policy and estimator
+randomness has the exact policy target as its marginal
+\citep{andrieuRoberts2009,jacobThiery2015}.  The identity is not automatically
+an efficient algorithm.  Its expected rollout count is \(\lambda\), and direct
+calculation gives
+\begin{equation}
+  \frac{\E[\widehat W_{\lambda}(\policy)^2]}
+       {\exp(2\beta J(\policy))}-1
+  = \exp\!\left(
+      \frac{\beta^2\E[(G_\policy-a)^2]}{\lambda}
+    \right)-1.
+  \label{eq:poisson-policy-weight-rv}
+\end{equation}
+Keeping this relative variance bounded can therefore require a rollout count
+that grows quadratically with \(\beta\) and with the distance from the return
+lower bound.  This explains why the exact construction is retained as a
+diagnostic and future sampler rather than silently replacing the practical
+fixed-tape approximation.

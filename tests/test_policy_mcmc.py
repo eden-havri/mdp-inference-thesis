@@ -28,7 +28,7 @@ def test_policy_mh_matches_exact_small_posterior_marginals() -> None:
         ),
     )
     assert sampled.simulator_steps == 0
-    assert sampled.value_evaluations == 60_001
+    assert sampled.value_evaluations + sampled.lazy_iterations == 60_001
     assert 0.0 < sampled.acceptance_rate < 1.0
     assert np.allclose(
         sampled.marginal_action_probabilities(mdp),
@@ -58,3 +58,31 @@ def test_autocorrelation_ess_detects_repeated_samples() -> None:
     sticky = np.repeat([-1.0, 1.0], 50)
     assert autocorrelation_effective_sample_size(independent_like) == len(independent_like)
     assert autocorrelation_effective_sample_size(sticky) < 5.0
+
+
+def test_policy_mh_requires_and_accounts_for_laziness() -> None:
+    mdp = two_step_choice_mdp()
+    sampled = run_single_site_policy_mh(
+        mdp,
+        mdp.policy_from_decisions((0, 0)),
+        PolicyMHConfig(
+            iterations=500,
+            burn_in=50,
+            thinning=5,
+            lazy_probability=0.2,
+            seed=9,
+        ),
+    )
+    assert 0 < sampled.lazy_iterations < 500
+    assert sampled.value_evaluations + sampled.lazy_iterations == 501
+
+    with np.testing.assert_raises(ValueError):
+        run_single_site_policy_mh(
+            mdp,
+            mdp.policy_from_decisions((0, 0)),
+            PolicyMHConfig(
+                iterations=10,
+                burn_in=1,
+                lazy_probability=0.0,
+            ),
+        )

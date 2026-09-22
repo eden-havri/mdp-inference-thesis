@@ -227,6 +227,41 @@ is outside this specification. Finite \(K\) makes (RE-2) a random approximation 
 tape banks are therefore independent SAA problem instances and are not additional
 samples from one Markov chain.
 
+#### Exact simulator-only extension (not a current primary implementation)
+
+Bounded returns make an exact pseudo-marginal construction possible in
+principle. If \(G(\pi,\xi)\ge g_-\), draw
+\(N\sim\operatorname{Poisson}(\lambda)\) and \(N\) independent rollouts, and
+define
+
+\[
+\widehat W_\lambda(\pi)
+=e^{\beta g_-}\prod_{i=1}^{N}
+\left(1+\frac{\beta(G_i-g_-)}{\lambda}\right).
+\tag{RE-PM-1}
+\]
+
+It is nonnegative and
+\(\mathbb E[\widehat W_\lambda(\pi)]=e^{\beta J(\pi)}\). An augmented-state
+pseudo-marginal MH kernel using this weight therefore has (1) as its policy
+marginal. Its expected rollout count per new weight is \(\lambda\), while
+
+\[
+\frac{\mathbb E[\widehat W_\lambda(\pi)^2]}
+     {e^{2\beta J(\pi)}}-1
+=\exp\left\{
+  \frac{\beta^2\mathbb E[(G-g_-)^2]}{\lambda}
+ \right\}-1.
+\tag{RE-PM-2}
+\]
+
+Thus a stable weight can require cost growing quadratically in \(\beta\) and
+the return range. Replica exchange would also need a correct extended-state
+swap or refresh kernel, not the deterministic-score swap in (RE-10). This
+extension must pass weight-variance, zero/overflow, exact-enumeration, and
+mixing gates before being promoted; until then the implemented modes remain
+the exact-model target and the explicitly approximate fixed-tape target.
+
 ### 4.2 Temperature ladder and joint invariant distribution
 
 Use \(L\ge2\) inverse temperatures
@@ -396,7 +431,7 @@ must be set before confirmatory outcomes are viewed.
 
 ### 4.7 Cost accounting
 
-With \(I\) recorded iterations, \(N_{\mathrm{lazy}}\) realized lazy sweeps, and
+With \(I\) total iterations, \(N_{\mathrm{lazy}}\) realized lazy sweeps, and
 \(L\) temperatures, the current implementation performs
 \(L+L(I-N_{\mathrm{lazy}})\) policy-value evaluations: \(L\) initial evaluations
 and one local proposal evaluation per replica per active sweep. Its expectation is
@@ -918,8 +953,9 @@ simultaneous Monte Carlo uncertainty. Repeat from identical warm starts and
 overdispersed starts. Verify that \(\beta_0=0\) has reference-measure marginals,
 that changing initialization does not change the transition kernel, and that
 cached-value and full-reevaluation implementations produce identical decisions
-under the same random variates. Confirm the exact count \(L(I+1)\) of policy-value
-evaluations and the observed simulator-transition count.
+under the same random variates. Confirm the exact count
+\(L+L(I-N_{\mathrm{lazy}})\) of policy-value evaluations and the observed
+simulator-transition count.
 
 ### 8.4 Objective-value tests
 

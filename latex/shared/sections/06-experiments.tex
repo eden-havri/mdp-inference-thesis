@@ -10,10 +10,24 @@ metric cannot substitute for failure on target fidelity or mixing.
 \DocSubsection{Domains and scope}
 
 Stochastic GridWorld is the complete primary study.  Easy, medium, and hard
-families vary grid size, obstacle density, horizon, transition slip, delayed
-reward, and route multiplicity.  Small instances retain exact enumeration;
+families use, respectively, \(8\!\times\!8\), \(16\!\times\!16\), and
+\(32\!\times\!32\) grids; wall fractions of 9.4\%, 19.9\%, and 30.0\%; action
+success probabilities of 0.90, 0.80, and 0.75; and horizons 64, 160, and 384.
+Frozen-map audits record reachability, shortest-path length and count, and
+single-cell start--goal bottlenecks.  Seed zero maps are development-only;
+held-out maps are frozen before confirmation.  Small instances retain exact enumeration;
 larger instances retain exact dynamic-programming evaluation of any fixed
 policy even when enumerating all policies is impossible.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/gridworld-tiers.pdf}
+  \caption{Representative development maps for the three GridWorld tiers.
+  White cells are traversable, dark cells are walls, blue marks the start,
+  and gold marks the goal.  Held-out maps are frozen separately and remain
+  unused during method development and tuning.}
+  \label{fig:gridworld-tiers}
+\end{figure}
 
 Only domains that add a distinct scientific stress test are considered after
 GridWorld passes its medium gates:
@@ -90,6 +104,16 @@ finite-horizon backup targets, discrete SAC uses time-indexed twin critics and
 replay tuples, while Double Q-learning uses time-indexed tables and projects its
 result into the declared stationary policy class using state--time visitation.
 
+Comparisons are stratified by information access.  In the known-model stratum,
+exact-value tempering is tested for target fidelity and mixing against exact
+enumeration or known-model controls.  In the simulator-only stratum, fixed-tape
+sample-average tempering and the five learned competitors receive the same
+generative simulator and matched training-transition allowance.  Exact-model
+tempering may be displayed beside simulator-only learners as a descriptive
+reference, but such a cross-stratum table cannot support a sample-efficiency
+superiority claim.  Model value evaluations, simulator transitions, and guide
+training transitions are therefore reported in separate cost columns.
+
 \DocSubsection{Common evaluation semantics}
 
 For every non-oracle method, the primary evaluator samples a complete
@@ -117,6 +141,13 @@ single global learning rate is not a fair tuning policy, but tuning allowance
 is matched in environment transitions and core-hours.  Tuning maps and seeds
 are disjoint from the final confirmatory set.
 
+The inverse temperature defines the target and is not selected after observing
+held-out control performance.  Exact diagnostic maps use a predeclared
+sensitivity grid; the headline GridWorld target freezes one value on seed-zero
+development maps.  The current development value is \(\beta=64\).  Any
+additional value is reported as target sensitivity with separate mixing and
+cost diagnostics, not as a best-of-grid result.
+
 All interactions used by PPO guide training, SMC, policy-bank evaluation, and
 sample-average MCMC count toward the proposed method.  Exact policy-value
 evaluations, optimizer updates, wall time, CPU or accelerator time, and peak
@@ -141,13 +172,16 @@ Tireworld work begins only after the GridWorld confirmatory manifest is frozen.
 
 \DocSubsection{Current empirical status}
 
-Confirmatory values are \textbf{TBD}.  A preliminary medium-GridWorld
-exact-value tempering diagnostic produced a strong committed policy but low
-cold-chain return effective sample size and no accepted exchanges on the
-coldest ladder edge.  It therefore failed the mixing gate and triggered
-warm-start and ladder-spacing diagnostics; it is not evidence that the method
-outperforms a competitor.  Full-scale arrays remain paused until a medium gate
-passes and independent-chain policy mixing is checked.
+Confirmatory values are \textbf{TBD}.  Preliminary medium-GridWorld exact-value
+tempering diagnostics produced strong committed policies but exposed a sharp
+intermediate-temperature exchange bottleneck.  A 32-temperature, power-four,
+lazy-kernel pilot improved the minimum adjacent-swap acceptance to 0.236,
+reached a return effective sample size of 107 from 400 retained draws, and sent
+eight distinct walkers to the cold replica.  It nevertheless completed no full
+temperature round trip and left 11 policy coordinates without a retained-sample
+switch.  These are tuning diagnostics, not evidence that the method outperforms
+a competitor.  Full-scale arrays remain paused until longer warm and
+overdispersed chains pass the predeclared between-chain gate.
 
 \begin{table}[t]
   \centering

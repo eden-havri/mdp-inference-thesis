@@ -6,8 +6,10 @@ import numpy as np
 import torch
 
 import mdp_inference.baselines as baseline_module
+import mdp_inference.experiment as experiment_module
 from mdp_inference.artifacts import write_grid_spec
 from mdp_inference.baselines import (
+    BaselineResult,
     CEMConfig,
     DiscreteSACConfig,
     DoubleQConfig,
@@ -253,3 +255,94 @@ def test_new_tabular_baselines_use_the_shared_experiment_budget(tmp_path) -> Non
         assert result["transition_budget"] == budget
         assert budget <= result["simulator_steps"] < budget + spec.horizon
         assert result["transition_budget_semantics"] == "minimum_counted_training_transitions"
+
+
+def test_experiment_forwards_competitor_hyperparameters(tmp_path, monkeypatch) -> None:
+    spec = GridWorldSpec(
+        rows=2,
+        cols=2,
+        start=(1, 0),
+        goals=((0, 1),),
+        slip_probability=0.0,
+        horizon=3,
+    )
+    map_path = tmp_path / "map.json"
+    write_grid_spec(map_path, spec)
+    captured: dict[str, object] = {}
+
+    def stub_for(method: str):
+        def train(mdp, config):
+            captured[method] = config
+            probabilities = np.full(
+                (mdp.num_states, mdp.num_actions), 1.0 / mdp.num_actions
+            )
+            return BaselineResult(probabilities, config.transition_budget, [])
+
+        return train
+
+    trainers = {
+        "reinforce": "train_reinforce",
+        "ppo": "train_ppo",
+        "sac": "train_discrete_sac",
+        "cem": "train_cem",
+        "double_q": "train_double_q",
+    }
+    for method, function_name in trainers.items():
+        monkeypatch.setattr(experiment_module, function_name, stub_for(method))
+        run_experiment(
+            ExperimentConfig(
+                run_id=f"{method}-forwarding",
+                method=method,
+                map_path=str(map_path),
+                output_root=str(tmp_path / "results"),
+                transition_budget=20,
+                evaluation_policy_samples=4,
+                learning_rate=0.0123,
+                reinforce_episodes_per_update=7,
+                reinforce_value_learning_rate=0.045,
+                ppo_batch_transitions=37,
+                ppo_update_epochs=3,
+                ppo_minibatch_size=11,
+                ppo_clip_ratio=0.17,
+                ppo_value_coefficient=0.4,
+                ppo_entropy_coefficient=0.02,
+                sac_replay_capacity=321,
+                sac_learning_starts=12,
+                sac_batch_size=9,
+                sac_alpha=0.08,
+                sac_tau=0.03,
+                sac_updates_per_transition=2,
+                cem_population_size=12,
+                cem_elite_fraction=0.25,
+                cem_rollouts_per_policy=2,
+                cem_smoothing=0.6,
+                cem_min_action_probability=0.01,
+                double_q_initial_epsilon=0.9,
+                double_q_final_epsilon=0.1,
+                double_q_exploration_fraction=0.7,
+            )
+        )
+
+    reinforce = captured["reinforce"]
+    assert reinforce.episodes_per_update == 7
+    assert reinforce.value_learning_rate == 0.045
+    ppo = captured["ppo"]
+    assert ppo.batch_transitions == 37
+    assert ppo.update_epochs == 3
+    assert ppo.minibatch_size == 11
+    assert ppo.clip_ratio == 0.17
+    sac = captured["sac"]
+    assert sac.replay_capacity == 321
+    assert sac.learning_starts == 12
+    assert sac.batch_size == 9
+    assert sac.alpha == 0.08
+    assert sac.tau == 0.03
+    assert sac.updates_per_transition == 2
+    cem = captured["cem"]
+    assert cem.population_size == 12
+    assert cem.rollouts_per_policy == 2
+    assert cem.smoothing == 0.6
+    double_q = captured["double_q"]
+    assert double_q.initial_epsilon == 0.9
+    assert double_q.final_epsilon == 0.1
+    assert double_q.exploration_fraction == 0.7

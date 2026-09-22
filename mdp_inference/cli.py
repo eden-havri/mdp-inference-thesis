@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .artifacts import write_grid_spec
+from .chain_diagnostics import audit_tempering_chains
 from .experiment import ExperimentConfig, run_experiment
 from .gridworld import GRID_DIFFICULTIES, generate_gridworld
 
@@ -65,6 +66,9 @@ def main(argv: list[str] | None = None) -> None:
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("manifest", type=Path)
 
+    chain_audit_parser = subparsers.add_parser("audit-tempering-chains")
+    chain_audit_parser.add_argument("output_root", type=Path)
+
     args = parser.parse_args(argv)
     if args.command == "generate-maps":
         generate_maps(args.output_dir, args.tiers, args.seeds)
@@ -74,6 +78,8 @@ def main(argv: list[str] | None = None) -> None:
         print(run_manifest_row(args.manifest, args.index))
     elif args.command == "audit":
         print(json.dumps(audit_results(args.manifest), indent=2))
+    elif args.command == "audit-tempering-chains":
+        print(json.dumps(audit_tempering_chains(args.output_root), indent=2))
 
 
 if __name__ == "__main__":

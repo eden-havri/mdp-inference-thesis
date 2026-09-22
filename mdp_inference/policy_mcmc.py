@@ -13,6 +13,7 @@ class PolicyMHConfig:
     iterations: int = 10_000
     burn_in: int = 2_000
     thinning: int = 10
+    lazy_probability: float = 0.05
     seed: int = 0
 
 
@@ -22,6 +23,7 @@ class PolicyMHResult:
     estimated_returns: np.ndarray
     accepted_proposals: int
     changed_return_proposals: int
+    lazy_iterations: int
     value_evaluations: int
     simulator_steps: int
 
@@ -84,6 +86,8 @@ def run_single_site_policy_mh(
         raise ValueError("burn_in must lie in [0, iterations)")
     if config.thinning <= 0:
         raise ValueError("thinning must be positive")
+    if not 0.0 < config.lazy_probability < 1.0:
+        raise ValueError("lazy_probability must lie in (0, 1)")
     if mdp.num_actions < 2 or mdp.num_decisions == 0:
         raise ValueError("policy MH requires at least one decision and two actions")
     if tapes is not None and tapes.horizon != mdp.horizon:
@@ -114,25 +118,29 @@ def run_single_site_policy_mh(
     current_return = estimate(policy)
     accepted = 0
     changed_return = 0
+    lazy_iterations = 0
     samples: list[np.ndarray] = []
     sample_returns: list[float] = []
     decision_states = np.asarray(mdp.decision_states, dtype=np.int64)
     for iteration in range(config.iterations):
-        state = int(decision_states[int(rng.integers(len(decision_states)))])
-        old_action = int(policy[state])
-        proposed_action = int(rng.integers(mdp.num_actions - 1))
-        if proposed_action >= old_action:
-            proposed_action += 1
-        proposal = policy.copy()
-        proposal[state] = proposed_action
-        proposed_return = estimate(proposal)
-        if not np.isclose(proposed_return, current_return, atol=1e-15, rtol=0.0):
-            changed_return += 1
-        log_acceptance = config.beta * (proposed_return - current_return)
-        if np.log(rng.random()) < min(0.0, log_acceptance):
-            policy = proposal
-            current_return = proposed_return
-            accepted += 1
+        if rng.random() < config.lazy_probability:
+            lazy_iterations += 1
+        else:
+            state = int(decision_states[int(rng.integers(len(decision_states)))])
+            old_action = int(policy[state])
+            proposed_action = int(rng.integers(mdp.num_actions - 1))
+            if proposed_action >= old_action:
+                proposed_action += 1
+            proposal = policy.copy()
+            proposal[state] = proposed_action
+            proposed_return = estimate(proposal)
+            if not np.isclose(proposed_return, current_return, atol=1e-15, rtol=0.0):
+                changed_return += 1
+            log_acceptance = config.beta * (proposed_return - current_return)
+            if np.log(rng.random()) < min(0.0, log_acceptance):
+                policy = proposal
+                current_return = proposed_return
+                accepted += 1
         if iteration >= config.burn_in and (iteration - config.burn_in) % config.thinning == 0:
             samples.append(policy.copy())
             sample_returns.append(current_return)
@@ -142,6 +150,7 @@ def run_single_site_policy_mh(
         estimated_returns=np.asarray(sample_returns, dtype=np.float64),
         accepted_proposals=accepted,
         changed_return_proposals=changed_return,
+        lazy_iterations=lazy_iterations,
         value_evaluations=value_evaluations,
         simulator_steps=simulator_steps,
     )

@@ -70,5 +70,23 @@
     "seed": 2,
     "path": "experiments\\maps\\hard-seed2.json",
     "sha256": "d2364ae18a96575c44218f39d3b18cdec1ce74276b1330c9f8c001a6848ac087"
+  },
+  {
+    "tier": "easy",
+    "seed": 3,
+    "path": "experiments\\maps\\easy-seed3.json",
+    "sha256": "536d75c4c46580e02c46fa6e8994eb105e0321242bad48b2dd5630aaf6bd504b"
+  },
+  {
+    "tier": "medium",
+    "seed": 3,
+    "path": "experiments\\maps\\medium-seed3.json",
+    "sha256": "584682e266fc8ae0f6afb65f648027a21d4119bcb1e6a514ff2e205d1fcacd7b"
+  },
+  {
+    "tier": "hard",
+    "seed": 3,
+    "path": "experiments\\maps\\hard-seed3.json",
+    "sha256": "167bbb5163b783d18cb45ecc017629819eb5a80b2c3ff4e9137c9bab779f1c20"
   }
 ]

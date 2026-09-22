@@ -22,9 +22,12 @@ exact target but requires the model.  Fixed-tape sample-average inference needs
 only a generative simulator, but its finite-\(K\) target differs from the
 scientific target and may require many rollouts when \(\beta\) is large.  It is
 therefore more accurate to call the overall approach simulator-based planning
-than model-free reinforcement learning.  Constructing an exact simulator-only
-pseudo-marginal method would require a nonnegative unbiased estimator of
-\(\exp(\beta J)\), not merely an unbiased estimator of \(J\).
+than model-free reinforcement learning.  Bounded finite-horizon returns do
+permit a nonnegative Poisson estimator of \(\exp(\beta J)\), and hence an exact
+pseudo-marginal construction; Appendix~\ref{app:derivations} gives the identity.
+Its relative variance can grow prohibitively at the large \(\beta\) values and
+return ranges needed here, so an implementation would require a separate
+variance-and-mixing gate rather than an unqualified claim of exact practicality.
 
 The direct ELBO avoids exponentiating a noisy value estimate, but its
 score-function gradient can have high variance and a factorized variational

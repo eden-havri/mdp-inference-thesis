@@ -59,6 +59,29 @@ must augment the policy input for every method.
    proposed method and are isolated in ablations.
 7. Failed, timed-out, and numerically invalid runs remain in the accounting.
 
+## Information-access strata
+
+Results are never pooled across unequal information access:
+
+- **Known-model target fidelity:** exact dynamic programming inside policy
+  tempering is compared with exact enumeration or other known-model controls.
+  This is the primary test of whether the desired policy distribution is
+  sampled correctly.
+- **Simulator-only control:** fixed-tape sample-average tempering and all
+  learned competitors receive the same generative simulator and matched
+  training-transition allowance. This is the like-for-like control comparison,
+  while explicitly recognizing that finite-tape inference targets an
+  approximation to the expected-return Gibbs distribution.
+- **Cross-stratum results:** exact-model tempering may be shown beside
+  simulator-only learners to explain attainable behavior or computational
+  tradeoffs, but it is labeled descriptive and cannot support a sample-efficiency
+  superiority claim.
+
+The nonstationary dynamic-programming oracle remains an upper control in both
+strata. Model evaluations, simulator transitions, and guide-training
+transitions are reported in separate columns rather than converted into an
+arbitrary common unit.
+
 ## Current audit limitations
 
 - All current GridWorld experiments use `gamma = 1`. Discounted-policy-gradient

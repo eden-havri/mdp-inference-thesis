@@ -56,6 +56,7 @@ Run or audit one manifest row through the CLI:
 ```bash
 python -m mdp_inference.cli audit experiments/cluster_canary_manifest.jsonl
 python -m mdp_inference.cli run-manifest-row experiments/cluster_canary_manifest.jsonl 0
+python -m mdp_inference.cli audit-tempering-chains results/medium-tempering-multichain-gate
 ```
 
 Every run writes a self-contained result directory and creates `DONE` only

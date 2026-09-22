@@ -5,11 +5,19 @@
 The experiment program should answer two separate questions:
 
 1. **Correctness:** does the current method implement the claimed distribution over complete policies and produce valid estimates?
-2. **Performance:** at the same number of environment transitions, does it learn policies that are better or more reliable than standard policy-gradient and entropy-regularized baselines?
+2. **Performance:** under the same simulator access and number of environment transitions, does it learn policies that are better or more reliable than standard policy-gradient and entropy-regularized baselines?
 
 No large cluster run should start until the corresponding smaller stage passes. The primary resource budget is the number of **logical environment transitions represented by training**, with wall-clock time, peak memory, and simulator calls logged as additional costs. For a particle method, a sweep with `N` particles and horizon `H` consumes `N * H` logical transitions even if vectorization or shared randomness reduces the number of function invocations.
 
 The confirmatory result is fixed-budget performance on held-out maps. Hyperparameter pruning and early stopping belong only to smoke tests and validation; they must not select favorable stopping points on the final test set.
+
+Comparisons are stratified by information access. Exact-model tempering is used
+for target-fidelity and mixing claims against exact known-model controls.
+Simulator-only fixed-tape tempering is compared with the five learned
+competitors under matched transition budgets. Exact-model results may be shown
+next to model-free learners only as a descriptive reference, never as evidence
+of superior sample efficiency. Model evaluations, simulator transitions, and
+guide-training transitions remain separate cost columns.
 
 ## Experimental contract to freeze first
 
@@ -23,6 +31,13 @@ Before implementing more algorithms, write one machine-readable experiment contr
 - the map-generation and map-acceptance rules;
 - the checkpoint schedule and primary metric;
 - the validation maps, test maps, and all seed lists.
+
+The inverse temperature is part of the scientific target, not a free optimizer
+setting to choose after seeing control scores. Exact diagnostic maps report a
+predeclared beta sensitivity grid. The headline GridWorld comparison freezes
+one beta on development map seed 0 before any held-out run; current development
+work uses `beta = 64`. Any secondary beta is labeled a target-sensitivity
+analysis and carries its own mixing and compute diagnostics.
 
 The policy-evaluation definition needs special care. Report these as distinct quantities when the method represents a distribution over deterministic policies:
 
@@ -74,34 +89,42 @@ The proposed particle method participates in every learned-method stage. For it,
 
 ### Easy tier
 
-- Sizes: 4x4 to 6x6.
-- Obstacles: approximately 5–12% of cells, while preserving at least two viable routes where possible.
-- Action success probability: 0.95 for the primary suite.
-- Accepted shortest-path length: approximately 6–14 steps.
-- Horizon: `max(20, ceil(2.0 * d_star))`, where `d_star` is the shortest feasible path length.
+- Frozen size: 8x8.
+- Obstacles: 6 walls, or 9.4% of cells.
+- Action success probability: 0.90.
+- Audited shortest-path length: 14 steps; audited reachability: 100%.
+- Horizon: 64.
 - Purpose: integration tests, fast tuning, and confirmation that every learned baseline can beat random.
 
 ### Medium tier
 
-- Sizes: 10x10 to 12x12.
-- Obstacles: approximately 15–25%.
-- Action success probability: 0.85.
-- Accepted shortest-path length: approximately 15–35 steps.
-- Horizon: `ceil(2.25 * d_star)`.
-- Include one broad-route map and one bottleneck/risky-shortcut map.
+- Frozen size: 16x16.
+- Obstacles: 51 walls, or 19.9% of cells.
+- Action success probability: 0.80.
+- Audited shortest-path length: 30–32 steps; audited reachable fraction: 97.6–100%.
+- Horizon: 160.
+- The frozen maps include one to five single-cell graph bottlenecks and many
+  distinct shortest action sequences.
 - Purpose: expose stochasticity, revisitation, multiple useful routes, and optimizer stability.
 
 ### Hard tier
 
-- Sizes: 20x20 to 25x25.
-- Obstacles: approximately 25–35%.
-- Action success probability: 0.70–0.75.
-- Accepted shortest-path length: approximately 35–80 steps.
-- Horizon: `ceil(2.5 * d_star)` with a documented hard cap.
-- Require at least one map with multiple route modes and one map with a narrow stochastic bottleneck.
+- Frozen size: 32x32.
+- Obstacles: 307 walls, or 30.0% of cells.
+- Action success probability: 0.75.
+- Audited shortest-path length: 62–72 steps; audited reachable fraction: 94.8–97.8%.
+- Horizon: 384.
+- The frozen maps span one to seventeen single-cell graph bottlenecks.
 - Purpose: measure scaling, particle degeneracy, sparse-success behavior, and wall-clock cost.
 
-For every generated map, reject it unless start and goal are connected, the target difficulty range is met, and the reachable-state fraction is recorded. Freeze accepted maps as files, give each a content hash, and never regenerate them from a seed during a reported run. Draw maps before seeing any algorithm result. A single primary action-success level per tier keeps the core design affordable; extra stochasticity or obstacle-density levels are one-factor stress tests after confirmation.
+Every frozen map has a content hash and a separate audited-characteristics
+record containing reachability, shortest-path length and count, and the number
+of single-cell start--goal bottlenecks. Never regenerate a frozen reported map
+from a seed. Seed 0 is development-only; seeds 1--3 are the three frozen
+held-out maps for each reported tier. Future candidates are rejected unless start and goal are
+connected and their declared tier constraints are met. A single primary action-
+success level per tier keeps the core design affordable; extra stochasticity or
+obstacle-density levels are one-factor stress tests after confirmation.
 
 ## Budgets and checkpoints
 

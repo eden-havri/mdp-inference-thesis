@@ -67,6 +67,28 @@ class ExperimentConfig:
     proposal_uniform_mix: float = 0.05
     warm_start_fraction: float = 0.5
     ppo_count_bonus: float = 0.0
+    reinforce_episodes_per_update: int = 16
+    reinforce_value_learning_rate: float = 5e-2
+    ppo_batch_transitions: int = 512
+    ppo_update_epochs: int = 4
+    ppo_minibatch_size: int = 128
+    ppo_clip_ratio: float = 0.2
+    ppo_value_coefficient: float = 0.5
+    ppo_entropy_coefficient: float = 0.01
+    sac_replay_capacity: int = 100_000
+    sac_learning_starts: int = 256
+    sac_batch_size: int = 128
+    sac_alpha: float = 0.1
+    sac_tau: float = 0.01
+    sac_updates_per_transition: int = 1
+    cem_population_size: int = 64
+    cem_elite_fraction: float = 0.2
+    cem_rollouts_per_policy: int = 4
+    cem_smoothing: float = 0.7
+    cem_min_action_probability: float = 0.0
+    double_q_initial_epsilon: float = 1.0
+    double_q_final_epsilon: float = 0.05
+    double_q_exploration_fraction: float = 0.5
     bank_snapshot_interval: int = 5
     bank_evaluation_tapes: int = 64
     mcmc_iterations: int = 5_000
@@ -79,6 +101,8 @@ class ExperimentConfig:
     mcmc_guide_strength: float = 0.5
     mcmc_lazy_probability: float = 0.05
     mcmc_prior_initialize_hot_replicas: bool = False
+    mcmc_seed: int | None = None
+    mcmc_tape_seed: int | None = None
 
     @classmethod
     def from_json(cls, path: Path) -> "ExperimentConfig":
@@ -188,6 +212,40 @@ def run_experiment(config: ExperimentConfig) -> Path:
         raise ValueError("warm_start_fraction must lie in (0, 1)")
     if config.ppo_count_bonus < 0.0:
         raise ValueError("ppo_count_bonus must be nonnegative")
+    if config.reinforce_episodes_per_update <= 0 or config.reinforce_value_learning_rate <= 0.0:
+        raise ValueError("invalid REINFORCE update size or value learning rate")
+    if (
+        config.ppo_batch_transitions <= 0
+        or config.ppo_update_epochs <= 0
+        or config.ppo_minibatch_size <= 0
+        or not 0.0 < config.ppo_clip_ratio < 1.0
+        or config.ppo_value_coefficient < 0.0
+        or config.ppo_entropy_coefficient < 0.0
+    ):
+        raise ValueError("invalid PPO hyperparameters")
+    if (
+        config.sac_replay_capacity <= 0
+        or config.sac_learning_starts < 0
+        or config.sac_batch_size <= 0
+        or config.sac_batch_size > config.sac_replay_capacity
+        or config.sac_alpha < 0.0
+        or not 0.0 < config.sac_tau <= 1.0
+        or config.sac_updates_per_transition <= 0
+    ):
+        raise ValueError("invalid discrete-SAC hyperparameters")
+    if (
+        config.cem_population_size < 2
+        or not 0.0 < config.cem_elite_fraction <= 1.0
+        or config.cem_rollouts_per_policy <= 0
+        or not 0.0 < config.cem_smoothing <= 1.0
+        or config.cem_min_action_probability < 0.0
+    ):
+        raise ValueError("invalid CEM hyperparameters")
+    if (
+        not 0.0 <= config.double_q_final_epsilon <= config.double_q_initial_epsilon <= 1.0
+        or not 0.0 < config.double_q_exploration_fraction <= 1.0
+    ):
+        raise ValueError("invalid Double-Q exploration schedule")
     if config.bank_snapshot_interval <= 0 or config.bank_evaluation_tapes <= 0:
         raise ValueError("policy-bank snapshot interval and tape count must be positive")
     if config.mcmc_iterations <= 0 or config.mcmc_thinning <= 0 or config.mcmc_tapes < 0:
@@ -200,6 +258,10 @@ def run_experiment(config: ExperimentConfig) -> Path:
         raise ValueError("invalid policy-tempering swap interval or guide strength")
     if not 0.0 < config.mcmc_lazy_probability < 1.0:
         raise ValueError("mcmc_lazy_probability must lie in (0, 1)")
+    if config.mcmc_seed is not None and config.mcmc_seed < 0:
+        raise ValueError("mcmc_seed must be nonnegative")
+    if config.mcmc_tape_seed is not None and config.mcmc_tape_seed < 0:
+        raise ValueError("mcmc_tape_seed must be nonnegative")
     map_path = Path(config.map_path).resolve()
     spec, map_hash = load_grid_spec(map_path)
     mdp = gridworld_mdp(spec)
@@ -365,7 +427,13 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 mdp,
                 PPOConfig(
                     transition_budget=config.transition_budget,
+                    batch_transitions=config.ppo_batch_transitions,
+                    update_epochs=config.ppo_update_epochs,
+                    minibatch_size=config.ppo_minibatch_size,
                     learning_rate=config.learning_rate,
+                    clip_ratio=config.ppo_clip_ratio,
+                    value_coefficient=config.ppo_value_coefficient,
+                    entropy_coefficient=config.ppo_entropy_coefficient,
                     count_bonus_coefficient=config.ppo_count_bonus,
                     seed=config.training_seed,
                 ),
@@ -444,7 +512,13 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 mdp,
                 PPOConfig(
                     transition_budget=warm_start_budget,
+                    batch_transitions=config.ppo_batch_transitions,
+                    update_epochs=config.ppo_update_epochs,
+                    minibatch_size=config.ppo_minibatch_size,
                     learning_rate=config.learning_rate,
+                    clip_ratio=config.ppo_clip_ratio,
+                    value_coefficient=config.ppo_value_coefficient,
+                    entropy_coefficient=config.ppo_entropy_coefficient,
                     count_bonus_coefficient=config.ppo_count_bonus,
                     seed=config.training_seed,
                 ),
@@ -544,7 +618,13 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 mdp,
                 PPOConfig(
                     transition_budget=config.transition_budget,
+                    batch_transitions=config.ppo_batch_transitions,
+                    update_epochs=config.ppo_update_epochs,
+                    minibatch_size=config.ppo_minibatch_size,
                     learning_rate=config.learning_rate,
+                    clip_ratio=config.ppo_clip_ratio,
+                    value_coefficient=config.ppo_value_coefficient,
+                    entropy_coefficient=config.ppo_entropy_coefficient,
                     count_bonus_coefficient=config.ppo_count_bonus,
                     snapshot_interval_updates=config.bank_snapshot_interval,
                     seed=config.training_seed,
@@ -621,20 +701,36 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 mdp,
                 PPOConfig(
                     transition_budget=config.transition_budget,
+                    batch_transitions=config.ppo_batch_transitions,
+                    update_epochs=config.ppo_update_epochs,
+                    minibatch_size=config.ppo_minibatch_size,
                     learning_rate=config.learning_rate,
+                    clip_ratio=config.ppo_clip_ratio,
+                    value_coefficient=config.ppo_value_coefficient,
+                    entropy_coefficient=config.ppo_entropy_coefficient,
                     count_bonus_coefficient=config.ppo_count_bonus,
                     seed=config.training_seed,
                 ),
             )
             history = proposal.history
             initial_policy = np.argmax(proposal.action_probabilities, axis=1).astype(np.int64)
+            realized_mcmc_seed = (
+                config.training_seed + 6_000_003
+                if config.mcmc_seed is None
+                else config.mcmc_seed
+            )
+            realized_mcmc_tape_seed = (
+                config.training_seed + 5_000_003
+                if config.mcmc_tape_seed is None
+                else config.mcmc_tape_seed
+            )
             mcmc_tapes = (
                 None
                 if config.mcmc_tapes == 0
                 else TapeBank.sample(
                     config.mcmc_tapes,
                     mdp.horizon,
-                    config.training_seed + 5_000_003,
+                    realized_mcmc_tape_seed,
                 )
             )
             mcmc_started = time.time()
@@ -646,7 +742,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     iterations=config.mcmc_iterations,
                     burn_in=config.mcmc_burn_in,
                     thinning=config.mcmc_thinning,
-                    seed=config.training_seed + 6_000_003,
+                    lazy_probability=config.mcmc_lazy_probability,
+                    seed=realized_mcmc_seed,
                 ),
                 tapes=mcmc_tapes,
             )
@@ -688,6 +785,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     if mcmc_tapes is None
                     else "fixed_tape_sample_average",
                     "mcmc_tapes": config.mcmc_tapes,
+                    "mcmc_seed": realized_mcmc_seed,
+                    "mcmc_tape_seed": realized_mcmc_tape_seed,
                     "mcmc_iterations": config.mcmc_iterations,
                     "mcmc_burn_in": config.mcmc_burn_in,
                     "mcmc_thinning": config.mcmc_thinning,
@@ -695,8 +794,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     "mcmc_acceptance_rate": chain.acceptance_rate,
                     "mcmc_target_return_ess": chain.return_effective_sample_size,
                     "mcmc_exact_return_ess": exact_return_ess,
+                    "mcmc_lazy_iterations": chain.lazy_iterations,
                     "mcmc_changed_return_fraction": chain.changed_return_proposals
-                    / float(config.mcmc_iterations),
+                    / float(max(chain.value_evaluations - 1, 1)),
                     "mcmc_value_evaluations": chain.value_evaluations,
                     "mcmc_simulator_steps": chain.simulator_steps,
                     "mcmc_elapsed_seconds": mcmc_elapsed,
@@ -712,20 +812,36 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 mdp,
                 PPOConfig(
                     transition_budget=config.transition_budget,
+                    batch_transitions=config.ppo_batch_transitions,
+                    update_epochs=config.ppo_update_epochs,
+                    minibatch_size=config.ppo_minibatch_size,
                     learning_rate=config.learning_rate,
+                    clip_ratio=config.ppo_clip_ratio,
+                    value_coefficient=config.ppo_value_coefficient,
+                    entropy_coefficient=config.ppo_entropy_coefficient,
                     count_bonus_coefficient=config.ppo_count_bonus,
                     seed=config.training_seed,
                 ),
             )
             history = proposal.history
             initial_policy = np.argmax(proposal.action_probabilities, axis=1).astype(np.int64)
+            realized_mcmc_seed = (
+                config.training_seed + 6_000_003
+                if config.mcmc_seed is None
+                else config.mcmc_seed
+            )
+            realized_mcmc_tape_seed = (
+                config.training_seed + 5_000_003
+                if config.mcmc_tape_seed is None
+                else config.mcmc_tape_seed
+            )
             mcmc_tapes = (
                 None
                 if config.mcmc_tapes == 0
                 else TapeBank.sample(
                     config.mcmc_tapes,
                     mdp.horizon,
-                    config.training_seed + 5_000_003,
+                    realized_mcmc_tape_seed,
                 )
             )
             mcmc_started = time.time()
@@ -745,7 +861,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     prior_initialize_hot_replicas=(
                         config.mcmc_prior_initialize_hot_replicas
                     ),
-                    seed=config.training_seed + 6_000_003,
+                    seed=realized_mcmc_seed,
                 ),
                 tapes=mcmc_tapes,
                 guide_probabilities=proposal.action_probabilities,
@@ -789,6 +905,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     if mcmc_tapes is None
                     else "fixed_tape_sample_average",
                     "mcmc_tapes": config.mcmc_tapes,
+                    "mcmc_seed": realized_mcmc_seed,
+                    "mcmc_tape_seed": realized_mcmc_tape_seed,
                     "mcmc_iterations": config.mcmc_iterations,
                     "mcmc_burn_in": config.mcmc_burn_in,
                     "mcmc_thinning": config.mcmc_thinning,
@@ -849,7 +967,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     mdp,
                     ReinforceConfig(
                         transition_budget=config.transition_budget,
+                        episodes_per_update=config.reinforce_episodes_per_update,
                         learning_rate=config.learning_rate,
+                        value_learning_rate=config.reinforce_value_learning_rate,
                         seed=config.training_seed,
                     ),
                 )
@@ -858,7 +978,13 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     mdp,
                     PPOConfig(
                         transition_budget=config.transition_budget,
+                        batch_transitions=config.ppo_batch_transitions,
+                        update_epochs=config.ppo_update_epochs,
+                        minibatch_size=config.ppo_minibatch_size,
                         learning_rate=config.learning_rate,
+                        clip_ratio=config.ppo_clip_ratio,
+                        value_coefficient=config.ppo_value_coefficient,
+                        entropy_coefficient=config.ppo_entropy_coefficient,
                         count_bonus_coefficient=config.ppo_count_bonus,
                         seed=config.training_seed,
                     ),
@@ -868,7 +994,13 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     mdp,
                     DiscreteSACConfig(
                         transition_budget=config.transition_budget,
+                        replay_capacity=config.sac_replay_capacity,
+                        learning_starts=config.sac_learning_starts,
+                        batch_size=config.sac_batch_size,
                         learning_rate=config.learning_rate,
+                        alpha=config.sac_alpha,
+                        tau=config.sac_tau,
+                        updates_per_transition=config.sac_updates_per_transition,
                         seed=config.training_seed,
                     ),
                 )
@@ -877,6 +1009,11 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     mdp,
                     CEMConfig(
                         transition_budget=config.transition_budget,
+                        population_size=config.cem_population_size,
+                        elite_fraction=config.cem_elite_fraction,
+                        rollouts_per_policy=config.cem_rollouts_per_policy,
+                        smoothing=config.cem_smoothing,
+                        min_action_probability=config.cem_min_action_probability,
                         seed=config.training_seed,
                     ),
                 )
@@ -886,6 +1023,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     DoubleQConfig(
                         transition_budget=config.transition_budget,
                         learning_rate=config.learning_rate,
+                        initial_epsilon=config.double_q_initial_epsilon,
+                        final_epsilon=config.double_q_final_epsilon,
+                        exploration_fraction=config.double_q_exploration_fraction,
                         seed=config.training_seed,
                     ),
                 )

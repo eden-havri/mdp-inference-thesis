@@ -141,18 +141,91 @@ def gridworld_mdp(spec: GridWorldSpec) -> FiniteHorizonMDP:
 def has_path(spec: GridWorldSpec) -> bool:
     walls = set(spec.walls)
     goals = set(spec.goals)
+    terminals = goals | set(spec.hazards)
     queue: deque[tuple[int, int]] = deque([spec.start])
     seen = {spec.start}
     while queue:
         cell = queue.popleft()
         if cell in goals:
             return True
+        if cell in terminals:
+            continue
         for action in range(4):
             neighbor = _move(spec, cell, action, walls)
             if neighbor not in walls and neighbor not in seen:
                 seen.add(neighbor)
                 queue.append(neighbor)
     return False
+
+
+@dataclass(frozen=True)
+class GridCharacteristics:
+    traversable_cells: int
+    reachable_cells: int
+    reachable_fraction: float
+    shortest_path_length: int
+    shortest_path_count: int
+    single_cell_bottlenecks: tuple[tuple[int, int], ...]
+
+
+def characterize_gridworld(spec: GridWorldSpec) -> GridCharacteristics:
+    """Return deterministic graph diagnostics for a frozen GridWorld map."""
+
+    walls = set(spec.walls)
+    goals = set(spec.goals)
+    terminals = goals | set(spec.hazards)
+
+    def distances_and_counts(
+        extra_wall: tuple[int, int] | None = None,
+    ) -> tuple[dict[tuple[int, int], int], dict[tuple[int, int], int]]:
+        blocked = walls | ({extra_wall} if extra_wall is not None else set())
+        if spec.start in blocked:
+            return {}, {}
+        distances = {spec.start: 0}
+        counts = {spec.start: 1}
+        queue: deque[tuple[int, int]] = deque([spec.start])
+        while queue:
+            cell = queue.popleft()
+            if cell in terminals:
+                continue
+            for action in range(4):
+                neighbor = _move(spec, cell, action, blocked)
+                if neighbor == cell or neighbor in blocked:
+                    continue
+                proposed_distance = distances[cell] + 1
+                if neighbor not in distances:
+                    distances[neighbor] = proposed_distance
+                    counts[neighbor] = counts[cell]
+                    queue.append(neighbor)
+                elif distances[neighbor] == proposed_distance:
+                    counts[neighbor] += counts[cell]
+        return distances, counts
+
+    distances, counts = distances_and_counts()
+    reachable_goals = [goal for goal in goals if goal in distances]
+    if not reachable_goals:
+        raise ValueError("GridWorld has no terminal-respecting path to a goal")
+    shortest_length = min(distances[goal] for goal in reachable_goals)
+    shortest_count = sum(
+        counts[goal] for goal in reachable_goals if distances[goal] == shortest_length
+    )
+    traversable = spec.rows * spec.cols - len(walls)
+    candidates = [
+        cell for cell in distances if cell != spec.start and cell not in terminals
+    ]
+    bottlenecks = []
+    for cell in candidates:
+        removed_distances, _ = distances_and_counts(cell)
+        if not any(goal in removed_distances for goal in goals):
+            bottlenecks.append(cell)
+    return GridCharacteristics(
+        traversable_cells=traversable,
+        reachable_cells=len(distances),
+        reachable_fraction=len(distances) / float(traversable),
+        shortest_path_length=shortest_length,
+        shortest_path_count=shortest_count,
+        single_cell_bottlenecks=tuple(sorted(bottlenecks)),
+    )
 
 
 @dataclass(frozen=True)
