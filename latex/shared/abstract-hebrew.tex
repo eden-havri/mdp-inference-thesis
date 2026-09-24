@@ -1,0 +1,42 @@
+\thispagestyle{empty}
+\selectlanguage{hebrew}
+
+\begin{center}
+  {\Large\bfseries \DocumentTitleHebrew\par}
+  \vspace{0.4cm}
+  {\large \AuthorNameHebrew\par}
+  \vspace{0.4cm}
+  {\large עבודת גמר לתואר \DegreeNameHebrew\par}
+  \vspace{0.2cm}
+  {\large אוניברסיטת בן-גוריון בנגב\par}
+  \vspace{0.2cm}
+  \selectlanguage{english}{\large \ThesisYear\par}
+  \selectlanguage{hebrew}
+  \vspace{0.9cm}
+  {\Large\bfseries תקציר\par}
+\end{center}
+
+אנו חוקרים הסקה בייסיאנית מוכללת מעל מדיניויות דטרמיניסטיות מלאות, תוך
+שמירה על מטרת הבקרה הרגילה של תוחלת התגמול בתהליך החלטה מרקובי סטוכסטי.
+התפלגות המטרה היא התפלגות גיבס אשר צפיפות הלוג שלה פרופורציונית לתוחלת
+התגמול של המדיניות. לכן היא שונה מהתפלגות מעל מסלולים הממצעת תגמולים
+ממומשים לאחר העלאה בחזקה; האחרונה רגישה לסיכון גם כאשר מטרת הבקרה המקורית
+אינה כזו. האלגוריתם המרכזי שלנו הוא
+\foreignlanguage{english}{Metropolis--Hastings} עם החלפת רפליקות במרחב המדיניויות.
+מדיניות \foreignlanguage{english}{PPO} נלמדת מספקת הצעות מקומיות בעלות תמיכה מלאה, אך
+תיקון הייסטינגס מדויק מונע מהמדריך לשנות את ההתפלגות הסטציונרית.
+
+כאשר מודל המעברים זמין, תכנות דינמי מחשב במדויק את התפלגות המטרה. כאשר
+קיימת גישה לסימולטור בלבד, בנק קבוע של סרטי מספרים אקראיים משותפים מגדיר
+קירוב שקוף המבוסס על ממוצע מדגם. אומדים וריאציוניים ישירים וגרסה משוכפלת
+של \foreignlanguage{english}{Sequential Monte Carlo} משמשים כניסויי אבלציה משלימים.
+בשלב ההערכה נדגמת מדיניות מלאה אחת ונשמרת לכל אורך האפיזודה. ההשוואה היא
+מול גרסאות מוגדרות במדויק של \foreignlanguage{english}{REINFORCE},
+\foreignlanguage{english}{PPO-Clip}, \foreignlanguage{english}{SAC} בדיד, חיפוש
+\foreignlanguage{english}{Cross-Entropy} קטגורי ו-\foreignlanguage{english}{Double Q-learning}, תוך
+התאמת תקציבי האינטראקציה והחישוב. שערי אימות מדויקים במרחבי מדיניות סופיים
+קודמים לניסויים גדולים יותר ב-\foreignlanguage{english}{GridWorld} סטוכסטי. טיוטה זו
+עדיין אינה טוענת לתוצאות אמפיריות מאששות; בדיקות הערבוב והעלות בקנה מידה
+בינוני עדיין מתבצעות.
+
+\selectlanguage{english}

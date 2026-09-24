@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -43,9 +44,23 @@ from .policy_mcmc import (
 )
 from .policy_tempering import (
     PolicyTemperingConfig,
+    normalize_frozen_guide_probabilities,
     run_replica_exchange_policy_mh,
 )
 from .replicated_smc import ReplicatedSMCConfig, run_replicated_policy_smc
+from .recovery_blocks import (
+    RECOVERY_BLOCK_CONSTRUCTION,
+    build_modal_path_recovery_blocks,
+)
+
+
+def _array_sha256(value: np.ndarray) -> str:
+    array = np.ascontiguousarray(value)
+    digest = hashlib.sha256()
+    digest.update(str(array.dtype).encode("ascii"))
+    digest.update(json.dumps(array.shape).encode("ascii"))
+    digest.update(array.tobytes())
+    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -97,8 +112,17 @@ class ExperimentConfig:
     mcmc_tapes: int = 0
     mcmc_temperatures: int = 8
     mcmc_ladder_power: float = 2.0
+    mcmc_beta_ladder: tuple[float, ...] | None = None
     mcmc_swap_interval: int = 1
+    mcmc_swap_sweeps: int = 4
     mcmc_guide_strength: float = 0.5
+    mcmc_global_refresh_probability: float = 0.10
+    mcmc_path_refresh_probability: float = 0.0
+    mcmc_block_refresh_probability: float = 0.0
+    mcmc_block_repeats: tuple[int, ...] | None = None
+    mcmc_global_map_weight: float = 0.25
+    mcmc_global_guide_weight: float = 0.70
+    mcmc_global_uniform_weight: float = 0.05
     mcmc_lazy_probability: float = 0.05
     mcmc_prior_initialize_hot_replicas: bool = False
     mcmc_seed: int | None = None
@@ -254,8 +278,44 @@ def run_experiment(config: ExperimentConfig) -> Path:
         raise ValueError("mcmc_burn_in must lie in [0, mcmc_iterations)")
     if config.mcmc_temperatures < 2 or config.mcmc_ladder_power <= 0.0:
         raise ValueError("invalid policy-tempering ladder")
-    if config.mcmc_swap_interval <= 0 or not 0.0 <= config.mcmc_guide_strength < 1.0:
+    if (
+        config.mcmc_swap_interval <= 0
+        or config.mcmc_swap_sweeps <= 0
+        or not 0.0 <= config.mcmc_guide_strength < 1.0
+    ):
         raise ValueError("invalid policy-tempering swap interval or guide strength")
+    global_weights = np.asarray(
+        [
+            config.mcmc_global_map_weight,
+            config.mcmc_global_guide_weight,
+            config.mcmc_global_uniform_weight,
+        ],
+        dtype=np.float64,
+    )
+    if (
+        not 0.0 <= config.mcmc_global_refresh_probability <= 1.0
+        or not 0.0 <= config.mcmc_path_refresh_probability <= 1.0
+        or not 0.0 <= config.mcmc_block_refresh_probability <= 1.0
+        or (
+            config.mcmc_global_refresh_probability
+            + config.mcmc_path_refresh_probability
+            + config.mcmc_block_refresh_probability
+            > 1.0
+        )
+        or np.any(~np.isfinite(global_weights))
+        or np.any(global_weights < 0.0)
+        or not np.isclose(global_weights.sum(), 1.0, rtol=0.0, atol=1e-12)
+        or config.mcmc_global_uniform_weight <= 0.0
+    ):
+        raise ValueError("invalid policy-tempering global refresh mixture")
+    if config.mcmc_block_repeats is not None:
+        raw_block_repeats = np.asarray(config.mcmc_block_repeats)
+        if (
+            raw_block_repeats.ndim != 1
+            or raw_block_repeats.dtype.kind not in "iu"
+            or np.any(raw_block_repeats <= 0)
+        ):
+            raise ValueError("mcmc_block_repeats must contain positive integers")
     if not 0.0 < config.mcmc_lazy_probability < 1.0:
         raise ValueError("mcmc_lazy_probability must lie in (0, 1)")
     if config.mcmc_seed is not None and config.mcmc_seed < 0:
@@ -307,6 +367,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
             mdp, random_policies, goal_states
         )
         result: dict[str, Any] = {
+            "result_schema_version": 4,
             "method": config.method,
             "random_marginal_value": uniform_random_policy_value(mdp),
             "random_committed_value": random_committed_mean,
@@ -335,6 +396,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
         policy_probabilities_artifact: np.ndarray | None = None
         policy_particles_artifact: np.ndarray | None = None
         policy_weights_artifact: np.ndarray | None = None
+        guide_probabilities_artifact: np.ndarray | None = None
+        block_catalog_artifact: np.ndarray | None = None
         primary_committed_policies: np.ndarray | None = None
         primary_committed_weights: np.ndarray | None = None
         if config.method == "random":
@@ -824,7 +887,53 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 ),
             )
             history = proposal.history
-            initial_policy = np.argmax(proposal.action_probabilities, axis=1).astype(np.int64)
+            guide_probabilities_artifact = normalize_frozen_guide_probabilities(
+                proposal.action_probabilities,
+                mdp,
+            )
+            if guide_probabilities_artifact.shape != (
+                mdp.num_states,
+                mdp.num_actions,
+            ):
+                raise RuntimeError("PPO guide must provide one action row per state")
+            if (
+                config.mcmc_path_refresh_probability > 0.0
+                or config.mcmc_block_refresh_probability > 0.0
+            ):
+                block_catalog_artifact = build_modal_path_recovery_blocks(
+                    mdp,
+                    guide_probabilities_artifact,
+                )
+                if (
+                    block_catalog_artifact.dtype != np.bool_
+                    or block_catalog_artifact.ndim != 2
+                    or block_catalog_artifact.shape[1] != mdp.num_decisions
+                    or block_catalog_artifact.shape[0] == 0
+                    or np.any(block_catalog_artifact.sum(axis=1) == 0)
+                ):
+                    raise RuntimeError(
+                        "recovery-block catalog must be nonempty boolean [B, D]"
+                    )
+            realized_block_repeats = (
+                []
+                if block_catalog_artifact is None
+                else (
+                    [1] * len(block_catalog_artifact)
+                    if config.mcmc_block_repeats is None
+                    else [int(value) for value in config.mcmc_block_repeats]
+                )
+            )
+            if block_catalog_artifact is not None and len(
+                realized_block_repeats
+            ) != len(block_catalog_artifact):
+                raise ValueError(
+                    "mcmc_block_repeats must contain one value per recovery block"
+                )
+            initial_policy = np.argmax(
+                guide_probabilities_artifact,
+                axis=1,
+            ).astype(np.int64)
+            initial_policy[mdp.terminal] = 0
             realized_mcmc_seed = (
                 config.training_seed + 6_000_003
                 if config.mcmc_seed is None
@@ -852,11 +961,26 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     beta=config.beta,
                     num_temperatures=config.mcmc_temperatures,
                     ladder_power=config.mcmc_ladder_power,
+                    beta_ladder=config.mcmc_beta_ladder,
                     iterations=config.mcmc_iterations,
                     burn_in=config.mcmc_burn_in,
                     thinning=config.mcmc_thinning,
                     swap_interval=config.mcmc_swap_interval,
+                    swap_sweeps=config.mcmc_swap_sweeps,
                     guide_strength=config.mcmc_guide_strength,
+                    global_refresh_probability=(
+                        config.mcmc_global_refresh_probability
+                    ),
+                    path_refresh_probability=(
+                        config.mcmc_path_refresh_probability
+                    ),
+                    block_refresh_probability=(
+                        config.mcmc_block_refresh_probability
+                    ),
+                    block_repeats=tuple(realized_block_repeats),
+                    global_map_weight=config.mcmc_global_map_weight,
+                    global_guide_weight=config.mcmc_global_guide_weight,
+                    global_uniform_weight=config.mcmc_global_uniform_weight,
                     lazy_probability=config.mcmc_lazy_probability,
                     prior_initialize_hot_replicas=(
                         config.mcmc_prior_initialize_hot_replicas
@@ -864,7 +988,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     seed=realized_mcmc_seed,
                 ),
                 tapes=mcmc_tapes,
-                guide_probabilities=proposal.action_probabilities,
+                guide_probabilities=guide_probabilities_artifact,
+                block_catalog=block_catalog_artifact,
             )
             mcmc_elapsed = time.time() - mcmc_started
             chain_probabilities = chain.marginal_action_probabilities(mdp)
@@ -912,14 +1037,128 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     "mcmc_thinning": config.mcmc_thinning,
                     "mcmc_samples": int(len(chain.policies)),
                     "mcmc_temperatures": config.mcmc_temperatures,
+                    "mcmc_ladder_kind": (
+                        "custom" if config.mcmc_beta_ladder is not None else "power"
+                    ),
+                    "mcmc_ladder_power": (
+                        None
+                        if config.mcmc_beta_ladder is not None
+                        else config.mcmc_ladder_power
+                    ),
                     "mcmc_prior_initialize_hot_replicas": (
                         config.mcmc_prior_initialize_hot_replicas
+                    ),
+                    "mcmc_swap_interval": config.mcmc_swap_interval,
+                    "mcmc_swap_sweeps": config.mcmc_swap_sweeps,
+                    "mcmc_global_refresh_probability": (
+                        config.mcmc_global_refresh_probability
+                    ),
+                    "mcmc_path_refresh_probability": (
+                        config.mcmc_path_refresh_probability
+                    ),
+                    "mcmc_block_refresh_probability": (
+                        config.mcmc_block_refresh_probability
+                    ),
+                    "mcmc_block_repeats": realized_block_repeats,
+                    "mcmc_global_mixture_weights": {
+                        "map": config.mcmc_global_map_weight,
+                        "guide_product": config.mcmc_global_guide_weight,
+                        "uniform": config.mcmc_global_uniform_weight,
+                    },
+                    "mcmc_diagnostic_window": "post_burn",
+                    "mcmc_guide_probabilities_sha256": _array_sha256(
+                        guide_probabilities_artifact
+                    ),
+                    "mcmc_block_sizes": (
+                        []
+                        if block_catalog_artifact is None
+                        else block_catalog_artifact.sum(axis=1).astype(int).tolist()
                     ),
                     "mcmc_lazy_probability": config.mcmc_lazy_probability,
                     "mcmc_lazy_iterations": chain.lazy_iterations,
                     "mcmc_beta_ladder": chain.betas.tolist(),
+                    "mcmc_local_proposals": chain.local_proposals.tolist(),
+                    "mcmc_local_accepts": chain.local_accepts.tolist(),
+                    "mcmc_swap_proposals": chain.swap_proposals.tolist(),
+                    "mcmc_swap_accepts": chain.swap_accepts.tolist(),
                     "mcmc_local_acceptance_rates": chain.local_acceptance_rates.tolist(),
+                    "mcmc_global_proposals": chain.global_proposals.tolist(),
+                    "mcmc_global_accepts": chain.global_accepts.tolist(),
+                    "mcmc_global_move_accepts": (
+                        chain.global_move_accepts.tolist()
+                    ),
+                    "mcmc_path_proposals": chain.path_proposals.tolist(),
+                    "mcmc_path_accepts": chain.path_accepts.tolist(),
+                    "mcmc_path_move_accepts": chain.path_move_accepts.tolist(),
+                    "mcmc_path_acceptance_rates": (
+                        chain.path_acceptance_rates.tolist()
+                    ),
+                    "mcmc_global_acceptance_rates": (
+                        chain.global_acceptance_rates.tolist()
+                    ),
+                    "mcmc_block_proposals": chain.block_proposals.tolist(),
+                    "mcmc_block_accepts": chain.block_accepts.tolist(),
+                    "mcmc_block_move_accepts": (
+                        chain.block_move_accepts.tolist()
+                    ),
+                    "mcmc_block_acceptance_rates": (
+                        chain.block_acceptance_rates.tolist()
+                    ),
                     "mcmc_swap_acceptance_rates": chain.swap_acceptance_rates.tolist(),
+                    "mcmc_post_burn_local_proposals": (
+                        chain.post_burn_local_proposals.tolist()
+                    ),
+                    "mcmc_post_burn_local_accepts": (
+                        chain.post_burn_local_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_swap_proposals": (
+                        chain.post_burn_swap_proposals.tolist()
+                    ),
+                    "mcmc_post_burn_swap_accepts": (
+                        chain.post_burn_swap_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_local_acceptance_rates": (
+                        chain.post_burn_local_acceptance_rates.tolist()
+                    ),
+                    "mcmc_post_burn_global_proposals": (
+                        chain.post_burn_global_proposals.tolist()
+                    ),
+                    "mcmc_post_burn_global_accepts": (
+                        chain.post_burn_global_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_global_move_accepts": (
+                        chain.post_burn_global_move_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_path_proposals": (
+                        chain.post_burn_path_proposals.tolist()
+                    ),
+                    "mcmc_post_burn_path_accepts": (
+                        chain.post_burn_path_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_path_move_accepts": (
+                        chain.post_burn_path_move_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_path_acceptance_rates": (
+                        chain.post_burn_path_acceptance_rates.tolist()
+                    ),
+                    "mcmc_post_burn_global_acceptance_rates": (
+                        chain.post_burn_global_acceptance_rates.tolist()
+                    ),
+                    "mcmc_post_burn_block_proposals": (
+                        chain.post_burn_block_proposals.tolist()
+                    ),
+                    "mcmc_post_burn_block_accepts": (
+                        chain.post_burn_block_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_block_move_accepts": (
+                        chain.post_burn_block_move_accepts.tolist()
+                    ),
+                    "mcmc_post_burn_block_acceptance_rates": (
+                        chain.post_burn_block_acceptance_rates.tolist()
+                    ),
+                    "mcmc_post_burn_swap_acceptance_rates": (
+                        chain.post_burn_swap_acceptance_rates.tolist()
+                    ),
                     "mcmc_target_return_ess": chain.return_effective_sample_size,
                     "mcmc_exact_return_ess": exact_return_ess,
                     "mcmc_policy_occupancy_ess": (
@@ -945,6 +1184,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     "mcmc_walker_temperature_visit_fractions": (
                         chain.temperature_visit_fractions.tolist()
                     ),
+                    "mcmc_walker_endpoint_visits": (
+                        chain.walker_endpoint_visits.tolist()
+                    ),
                     "mcmc_walker_endpoint_transitions": (
                         chain.walker_endpoint_transitions.tolist()
                     ),
@@ -952,12 +1194,23 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     "mcmc_total_round_trips": int(chain.walker_round_trips.sum()),
                     "mcmc_cold_walker_count": chain.cold_walker_count,
                     "mcmc_value_evaluations": chain.value_evaluations,
+                    "mcmc_score_computations": chain.score_computations,
+                    "mcmc_score_cache_hits": chain.score_cache_hits,
                     "mcmc_simulator_steps": chain.simulator_steps,
                     "mcmc_elapsed_seconds": mcmc_elapsed,
                     "training_simulator_steps": proposal.transitions,
                     "simulator_steps": proposal.transitions + chain.simulator_steps,
                 }
             )
+            if block_catalog_artifact is not None:
+                result.update(
+                    {
+                        "mcmc_block_catalog_sha256": _array_sha256(
+                            block_catalog_artifact
+                        ),
+                        "mcmc_block_catalog_kind": RECOVERY_BLOCK_CONSTRUCTION,
+                    }
+                )
             policy_probabilities_artifact = chain_probabilities
             policy_particles_artifact = chain.policies
             primary_committed_policies = chain.policies
@@ -1117,6 +1370,24 @@ def run_experiment(config: ExperimentConfig) -> Path:
             if saved_particles.shape != policy_particles_artifact.shape:
                 raise ValueError("saved policy particles have the wrong shape")
             result["policy_particles_artifact"] = particles_path.name
+        if guide_probabilities_artifact is not None:
+            guide_path = work_dir / "mcmc_guide_probabilities.npy"
+            np.save(guide_path, guide_probabilities_artifact, allow_pickle=False)
+            saved_guide = np.load(guide_path, allow_pickle=False)
+            if not np.array_equal(saved_guide, guide_probabilities_artifact):
+                raise IOError("saved guide-probability artifact failed validation")
+            result["mcmc_guide_probabilities_artifact"] = guide_path.name
+        if block_catalog_artifact is not None:
+            block_catalog_path = work_dir / "mcmc_block_catalog.npy"
+            np.save(
+                block_catalog_path,
+                block_catalog_artifact,
+                allow_pickle=False,
+            )
+            saved_block_catalog = np.load(block_catalog_path, allow_pickle=False)
+            if not np.array_equal(saved_block_catalog, block_catalog_artifact):
+                raise IOError("saved recovery-block catalog failed validation")
+            result["mcmc_block_catalog_artifact"] = block_catalog_path.name
         if policy_weights_artifact is not None:
             weights_path = work_dir / "policy_weights.npy"
             np.save(weights_path, policy_weights_artifact, allow_pickle=False)

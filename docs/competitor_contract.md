@@ -4,10 +4,10 @@
 
 | Reported name | Implemented variant | Role |
 |---|---|---|
-| REINFORCE | Monte Carlo policy gradient with a learned state-value baseline | Basic on-policy policy-gradient baseline |
-| PPO | PPO-Clip with Monte Carlo advantages and an entropy bonus | Stronger on-policy policy-gradient baseline |
+| REINFORCE | Monte Carlo policy gradient with a learned state-value baseline | On-policy score-function baseline |
+| PPO-Clip | Clipped surrogate with Monte Carlo advantages and an entropy bonus | On-policy clipped-surrogate baseline |
 | Discrete SAC | Categorical actor, twin critics, target critics, fixed entropy temperature, replay | Off-policy entropy-regularized baseline |
-| CEM | Categorical cross-entropy search over complete deterministic stationary policies | Direct black-box policy-search baseline |
+| Categorical CEM | Cross-entropy search over complete deterministic stationary policies | Direct black-box policy-search baseline |
 | Double Q-learning | Online tabular Double Q-learning with annealed epsilon-greedy exploration | Value-learning baseline |
 
 Uniform random and exact finite-horizon dynamic programming are controls, not

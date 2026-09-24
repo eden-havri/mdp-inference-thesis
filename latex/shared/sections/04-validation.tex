@@ -31,13 +31,25 @@ Experiments advance only after the preceding gate passes:
   \item \textbf{Mechanics.} Transition rows, rewards, termination, horizons,
         seeded replay, artifact writing, and budget counters pass unit tests.
   \item \textbf{Target.} Enumeration verifies exact probabilities, modes,
-        marginals, local acceptance ratios, and swap acceptance ratios.
+        marginals, local and whole-policy acceptance ratios, and swap
+        acceptance ratios.
   \item \textbf{Approximation.} Increasing the immutable tape-bank size
         reduces sample-average target error on repeated small problems; a
         failure stops simulator-only scaling.
-  \item \textbf{Mixing.} One-seed medium pilots show finite outputs, adequate
-        cold-chain effective sample size, and exchange across every ladder
-        edge.  A high local acceptance rate alone is not sufficient.
+  \item \textbf{Mixing.} A one-chain rescue check first requires an accepted,
+        policy-changing whole-policy refresh in the upper quarter of the
+        inverse-temperature ladder, an accepted final-edge swap,
+        more than one cold-reaching walker, and at least two sampled cold-replica
+        policies.  A cheap two-chain ladder-flow
+        probe then requires
+        post-burn acceptance of at least \(0.20\) on every edge and an endpoint
+        transition in each chain.  Passing this probe authorizes, but does not
+        replace, the four-chain mixing run.  That full gate requires split
+        return \(\widehat R\leq1.05\), per-chain return ESS of at least 100,
+        flow through every ladder edge and in both directions, between-chain
+        coordinate agreement, and within-chain policy movement.  High local
+        acceptance or either passing fail-fast probe alone is not evidence of
+        mixing.
   \item \textbf{Cost.} Three short runs establish memory, wall-clock time, and
         value-evaluation or simulator-step rates before a large job array is
         submitted.

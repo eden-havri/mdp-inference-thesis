@@ -1,0 +1,14 @@
+{
+  "python": "3.11.16 (main, Aug 27 2026, 14:44:21) [GCC 14.3.0]",
+  "platform": "Linux-5.14.0-611.47.1.el9_7.x86_64-x86_64-with-glibc2.34",
+  "numpy": "2.4.6",
+  "torch": "2.14.0+cpu",
+  "pid": 762063,
+  "revision": null,
+  "dirty": null,
+  "map_hash": "d10b0569fafc1a2aa93252328e551ab59ea52a31dd44ece73efb0e006168fed7",
+  "slurm_job_id": "21592219",
+  "slurm_array_task_id": "7",
+  "source_snapshot_sha256": "c8d82cf0f5552f66a57c65a04499e2aefb942819192c53b91e3dba4eff614ad7",
+  "source_snapshot_file_count": 18
+}

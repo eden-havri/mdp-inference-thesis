@@ -24,7 +24,7 @@ reported explicitly as an approximation.
 
 Complementary implementations include direct expected-return ELBO training,
 replicated policy SMC, single-chain policy MH, and a restricted policy bank.
-The standard comparison set is REINFORCE with a learned value baseline,
+The declared comparison set is REINFORCE with a learned value baseline,
 PPO-Clip, discrete SAC, categorical CEM, and Double Q-learning. Random control
 and finite-horizon dynamic programming are reported separately.
 
@@ -38,8 +38,6 @@ and finite-horizon dynamic programming are reported separately.
   and scaling plan.
 - `latex/`: shared scientific content with paper and BGU thesis wrappers.
 - `slurm/`: BGU cluster setup and capped-array scripts.
-- `gocai/`: earlier compatibility prototype; it is not the primary experiment
-  implementation.
 
 ## Local setup and checks
 
@@ -56,11 +54,28 @@ Run or audit one manifest row through the CLI:
 ```bash
 python -m mdp_inference.cli audit experiments/cluster_canary_manifest.jsonl
 python -m mdp_inference.cli run-manifest-row experiments/cluster_canary_manifest.jsonl 0
+python -m mdp_inference.cli audit-baseline-gate experiments/easy_competitor_stability_gate_manifest.jsonl
+python -m mdp_inference.cli audit-tempering-rescue results/medium-tempering-global-rescue-gate
+python -m mdp_inference.cli audit-tempering-probe results/medium-tempering-global-probe-gate
 python -m mdp_inference.cli audit-tempering-chains results/medium-tempering-multichain-gate
 ```
 
+The one-chain rescue audit requires at least one accepted, policy-changing
+post-burn whole-policy refresh in the upper ladder quarter, at least one accepted
+post-burn final-edge swap, and at least two distinct walkers observed at the
+cold replica, with at least two distinct cold-replica policies sampled. The
+two-chain probe then requires post-burn acceptance of at
+least `0.20` on every ladder edge and an endpoint transition in both chains.
+Passing either cheap check is not evidence of mixing; only the full multichain
+audit applies return R-hat/ESS, swap and round-trip flow, between-chain
+agreement, and within-chain policy movement.
+
 Every run writes a self-contained result directory and creates `DONE` only
 after its artifacts have been validated.
+
+The baseline-gate audit checks every manifest row for complete finite output,
+the full transition budget, an oracle-bounded committed-policy value, and a
+strict improvement over the matched random committed-policy control.
 
 ## Cluster workflow
 

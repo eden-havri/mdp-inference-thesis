@@ -78,16 +78,63 @@ different action makes even a fixed categorical guide asymmetric.  With full
 support, this kernel is irreducible on the finite policy space and satisfies
 detailed balance with the chosen exact or fixed-tape target.
 
+\DocSubsection{Exact whole-policy independence refresh}
+
+Single-site edits can be ineffective on a sparse-return plateau, where many
+policies have the same score but reaching a useful policy requires several
+coordinated action changes.  Each active replica update therefore chooses the
+single-site kernel with probability \(1-\rho\), or an independence proposal
+with probability \(\rho\).  The fixed whole-policy proposal is
+\begin{equation}
+  Q_\phi(\policy)
+  =w_{\mathrm{map}}\mathbf 1\{\policy=\policy_\phi^{\mathrm{MAP}}\}
+   +w_{\mathrm{guide}}\prod_{s\in\mathcal D}
+       p_\phi(\policy(s)\mid s)
+   +w_{\mathrm{uniform}}|\mathcal A|^{-|\mathcal D|},
+  \label{eq:global-policy-proposal}
+\end{equation}
+where \(\mathcal D\) is the decision-state set and
+\(\policy_\phi^{\mathrm{MAP}}\) is the statewise mode of the frozen PPO guide.
+The defaults are
+\(\rho=0.10\) and
+\((w_{\mathrm{map}},w_{\mathrm{guide}},w_{\mathrm{uniform}})
+=(0.25,0.70,0.05)\).  The components overlap, so the proposal density is the
+sum in Equation~\eqref{eq:global-policy-proposal}, evaluated by log-sum-exp,
+not merely the density of the component that generated the draw.  The positive
+uniform component guarantees full support.
+
+At inverse temperature \(b\), an independent draw
+\(\policy'\sim Q_\phi\) is accepted with
+\begin{align}
+  \log R_b(\policy,\policy')={}&
+      b\{\widetilde J(\policy')-\widetilde J(\policy)\}
+      \notag\\
+    &+\log\mu(\policy')-\log\mu(\policy)
+      \notag\\
+    &+\log Q_\phi(\policy)-\log Q_\phi(\policy'),
+      \label{eq:global-policy-log-ratio}\\
+  \alpha_b^{\mathrm{global}}(\policy,\policy')={}&
+      \min\{1,\exp[\log R_b(\policy,\policy')]\}.
+  \label{eq:global-policy-mh}
+\end{align}
+This is an ordinary independence Metropolis--Hastings step
+\citep{mengersenTweedie1996}.  The complete proposal ratio is mandatory.
+Consequently, the guide, its mode, and the branch probability affect efficiency
+but cannot change the invariant target.  Full support gives an asymptotic
+finite-space convergence guarantee, not evidence that a finite run has mixed.
+
 Forced-different proposals can be periodic in a two-action domain.  We therefore
-mix every complete local-update-plus-swap sweep with the identity kernel:
+mix every complete within-replica-plus-swap sweep with the identity kernel:
 \begin{equation}
   K_\delta=\delta I+(1-\delta)K, \qquad 0<\delta<1.
   \label{eq:lazy-sweep}
 \end{equation}
 The stay-put decision is independent of the chain state, so it preserves the
 product target while giving every augmented chain state a positive self-transition.
-The default is \(\delta=0.05\); swap parity advances only on active sweeps, and
-both \(\delta\) and the realized lazy-sweep count are stored with each run.
+The default is \(\delta=0.05\); swap parity advances only on active sweeps.
+The branch settings, local and global proposal/acceptance counts, a separate
+count of accepted policy-changing global moves, \(\delta\), and the realized
+lazy-sweep count are stored with each run.
 
 \DocSubsection{Replica exchange across inverse temperatures}
 
@@ -97,13 +144,20 @@ inverse temperatures
 \begin{equation}
   0=b_0 < b_1 < \cdots < b_{M-1}=\beta,
   \qquad
-  b_\ell=\beta\{\ell/(M-1)\}^p,
+  b_\ell^{(0)}=\beta\{\ell/(M-1)\}^p,
   \label{eq:temperature-ladder}
 \end{equation}
-where \(p>0\) controls ladder spacing.  Replica \(\ell\) applies the local
-kernel in Equation~\eqref{eq:local-mh} with \(b=b_\ell\).  After a fixed
-number of local sweeps, alternating adjacent pairs propose to exchange their
-complete policies.  For replicas \(i<j\), the swap acceptance probability is
+where \(p>0\) controls the initial ladder spacing.  Development-only pilots may
+replace this power ladder with a fixed, explicitly listed ladder that places
+more replicas at measured exchange bottlenecks, following the feedback
+principle of \citet{katzgraberEtAl2006}.  Adaptation stops before target samples
+are collected, and the endpoints remain zero and \(\beta\).  Replica \(\ell\)
+applies the fixed mixture of Equations~\eqref{eq:local-mh} and
+\eqref{eq:global-policy-mh} with \(b=b_\ell\).  At a declared interval, four
+checkerboard swap sub-sweeps are applied by default, with parity alternating
+globally.  These extra swaps reuse cached values and compose invariant kernels,
+so they can improve temperature-space flow without extra policy evaluations
+\citep{choderaShirts2011}.  For replicas \(i<j\), the swap acceptance probability is
 \begin{equation}
   \alpha_{i,j}^{\mathrm{swap}}
   = \min\!\left\{1,
@@ -118,9 +172,9 @@ This is a Metropolis update for the product of tempered targets
   \exp(b_\ell\widetilde J(\policy_\ell)),
 \]
 and hence preserves the desired cold marginal at \(b_{M-1}=\beta\)
-\citep{geyer1991}.  The PPO guide affects only
-proposal efficiency; Equations~\eqref{eq:local-mh} and \eqref{eq:swap-mh}
-retain the target.
+\citep{geyer1991}.  The PPO guide affects only proposal efficiency;
+Equations~\eqref{eq:local-mh}, \eqref{eq:global-policy-mh}, and
+\eqref{eq:swap-mh} retain the target.
 
 By default, all replicas start at the PPO statewise mode, while the
 \(b_0=0\) chain is allowed to forget that initializer during burn-in.  A
@@ -131,17 +185,26 @@ strongly affect a finite run.  Only thinned post-burn-in draws from the
 
 \DocSubsection{Diagnostics and cost accounting}
 
-Each run records the beta ladder, local proposals and acceptances, adjacent
-swap proposals and acceptances, retained returns, return effective sample size,
+Each run records the beta ladder, local and global proposals and acceptances,
+accepted policy-changing global moves, and adjacent swap proposals and
+acceptances for both the complete and post-burn windows, retained returns,
+return effective sample size,
 policy-value evaluations, lazy sweeps, simulator transitions, PPO training
 transitions, wall-clock time, and software and source hashes.  Return effective
 sample size is necessary but can miss movement between policies with similar
-value.  We therefore also record action-indicator effective sample sizes,
-statewise switch rates, distinct sampled policies, walker temperature visits,
-endpoint transitions, round trips, and the number of walkers reaching the cold
-replica.  Independent warm and overdispersed chains provide the between-chain
-check.  A ladder with an exchange bottleneck or no completed traversal fails the
-mixing gate even if its cold replica attains high return.
+value.  We therefore also record conservative and quantile summaries of
+action-indicator effective sample sizes, statewise switch-rate summaries,
+distinct sampled policies, walker temperature visits, endpoint transitions,
+round trips, and the number of walkers reaching the cold replica.  Independent
+warm and overdispersed chains provide the between-chain check.  Calibration
+uses two distinct decisions.  A short two-chain probe tests
+only whether the proposed ladder has viable post-burn edge exchange and endpoint
+flow; passing it merely permits the longer run.  The full multichain gate then
+tests return \(\widehat R\) and ESS, edge exchange, cold-reaching walkers and
+round trips, coordinate total variation, unique-policy fraction, mean policy
+Hamming movement, and switching at nondegenerate coordinates.  Only the latter
+supports a mixing claim.  A high-return cold replica cannot compensate for a
+failure at either stage.
 
 For \(I\) total iterations, \(N_{\mathrm{lazy}}\) lazy sweeps, and \(M\)
 temperatures, the sampler uses

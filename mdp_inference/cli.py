@@ -5,7 +5,12 @@ import json
 from pathlib import Path
 
 from .artifacts import write_grid_spec
-from .chain_diagnostics import audit_tempering_chains
+from .baseline_diagnostics import audit_baseline_gate
+from .chain_diagnostics import (
+    audit_tempering_chains,
+    audit_tempering_probe,
+    audit_tempering_rescue,
+)
 from .experiment import ExperimentConfig, run_experiment
 from .gridworld import GRID_DIFFICULTIES, generate_gridworld
 
@@ -69,6 +74,15 @@ def main(argv: list[str] | None = None) -> None:
     chain_audit_parser = subparsers.add_parser("audit-tempering-chains")
     chain_audit_parser.add_argument("output_root", type=Path)
 
+    probe_audit_parser = subparsers.add_parser("audit-tempering-probe")
+    probe_audit_parser.add_argument("output_root", type=Path)
+
+    rescue_audit_parser = subparsers.add_parser("audit-tempering-rescue")
+    rescue_audit_parser.add_argument("output_root", type=Path)
+
+    baseline_audit_parser = subparsers.add_parser("audit-baseline-gate")
+    baseline_audit_parser.add_argument("manifest", type=Path)
+
     args = parser.parse_args(argv)
     if args.command == "generate-maps":
         generate_maps(args.output_dir, args.tiers, args.seeds)
@@ -79,7 +93,25 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "audit":
         print(json.dumps(audit_results(args.manifest), indent=2))
     elif args.command == "audit-tempering-chains":
-        print(json.dumps(audit_tempering_chains(args.output_root), indent=2))
+        report = audit_tempering_chains(args.output_root)
+        print(json.dumps(report, indent=2))
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "audit-tempering-probe":
+        report = audit_tempering_probe(args.output_root)
+        print(json.dumps(report, indent=2))
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "audit-tempering-rescue":
+        report = audit_tempering_rescue(args.output_root)
+        print(json.dumps(report, indent=2))
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "audit-baseline-gate":
+        report = audit_baseline_gate(args.manifest)
+        print(json.dumps(report, indent=2))
+        if not report["passed"]:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

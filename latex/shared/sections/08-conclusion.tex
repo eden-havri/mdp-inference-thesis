@@ -8,8 +8,8 @@ to average exponentiated realized returns.  Guided replica-exchange
 Metropolis--Hastings provides an exact sampler when policy values are computed
 by dynamic programming and an exact sampler for a declared fixed-tape
 sample-average target under simulator access.  Full-support guidance can
-improve proposals without changing either target because every local move is
-Hastings-corrected.
+improve proposals without changing either target because both the local and
+whole-policy proposal branches are Hastings-corrected.
 
 Bounded returns also yield a nonnegative unbiased Poisson weight for an exact
 simulator-only pseudo-marginal extension.  Its explicit relative-variance

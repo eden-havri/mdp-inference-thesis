@@ -158,6 +158,19 @@ class FiniteHorizonMDP:
         next_state = _sample_cdf(self.transition[state, action], u)
         return next_state, float(self.reward[state, action, next_state])
 
+    def successor_probabilities(
+        self, state: int, action: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return the positive-probability successor distribution.
+
+        Successor state IDs are strictly increasing.  The returned arrays are
+        copies, so callers cannot mutate the MDP through this inspection API.
+        """
+
+        probabilities = self.transition[state, action]
+        successors = np.flatnonzero(probabilities > 0.0).astype(np.int64, copy=False)
+        return successors.copy(), probabilities[successors].copy()
+
     def action_backups(self, next_value: np.ndarray) -> np.ndarray:
         next_value = np.asarray(next_value, dtype=np.float64)
         if next_value.shape != (self.num_states,):
@@ -416,6 +429,22 @@ class BranchedFiniteHorizonMDP(FiniteHorizonMDP):
             int(self.next_state[state, action, branch]),
             float(self.branch_reward[state, action, branch]),
         )
+
+    def successor_probabilities(
+        self, state: int, action: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return the aggregated positive-probability successor distribution."""
+
+        branch_probabilities = self.probability[state, action]
+        positive = branch_probabilities > 0.0
+        aggregated = np.zeros(self.num_states, dtype=np.float64)
+        np.add.at(
+            aggregated,
+            self.next_state[state, action, positive],
+            branch_probabilities[positive],
+        )
+        successors = np.flatnonzero(aggregated > 0.0).astype(np.int64, copy=False)
+        return successors.copy(), aggregated[successors].copy()
 
     def action_backups(self, next_value: np.ndarray) -> np.ndarray:
         next_value = np.asarray(next_value, dtype=np.float64)

@@ -1,0 +1,163 @@
+% Thesis-only presentation based on the BGU Thesis Template (New Version 2022).
+% See vendor/bgu-template/ATTRIBUTION.md for source and license information.
+\usepackage{silence}
+\WarningFilter{caption}{Unknown document class}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage[nottoc]{tocbibind}
+\usepackage{etoolbox}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyhead[C]{\thepage}%
+  \renewcommand{\headrulewidth}{0pt}%
+}
+\setlength{\headheight}{15pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\doublespacing
+
+\PrerenderUnicode{א}
+
+\makeatletter
+\newcommand{\BGUHebrewTableOfContents}{%
+  \selectlanguage{hebrew}%
+  \section*{\contentsname
+    \@mkboth{\MakeUppercase\contentsname}{\MakeUppercase\contentsname}}%
+  \@starttoc{tocheb}%
+  \selectlanguage{english}%
+}
+\makeatother
+
+\newcommand{\BGUAddHebrewChapter}[1]{%
+  \addtocontents{tocheb}{\protect\contentsline{chapter}{%
+    \protect\numberline{\thechapter}{#1}}{%
+    {\protect\beginL\thepage\protect\endL}}{}}%
+}
+\newcommand{\BGUAddHebrewUnnumbered}[1]{%
+  \addtocontents{tocheb}{\protect\contentsline{chapter}{#1}{%
+    {\protect\beginL\thepage\protect\endL}}{}}%
+}
+
+\newcommand{\BGUTitleHeaderEnglish}{%
+  \includegraphics[width=0.1\textwidth]{vendor/bgu-template/bgu.png}\\
+  \InstitutionName\\
+  \FacultyName\\
+  \DepartmentName\par
+}
+
+\newcommand{\MakeBGUThesisCover}{%
+  \begin{titlepage}
+    \begin{center}
+      \vspace*{1cm}
+      \BGUTitleHeaderEnglish
+      \vspace{2cm}
+
+      {\Large\bfseries \DocumentTitle}
+      \vspace{1cm}
+
+      Thesis submitted in partial fulfillment of the requirements\\
+      for the \DegreeName\ degree
+      \vspace{1cm}
+
+      \textbf{\AuthorName}
+      \vspace{1cm}
+
+      Under the supervision of \textbf{\AdvisorName}
+      \vfill
+
+      \ThesisMonth\ \ThesisYear
+    \end{center}
+  \end{titlepage}
+}
+
+\newcommand{\MakeBGUThesisTitlePage}{%
+  \begin{titlepage}
+    \begin{center}
+      \vspace*{1cm}
+      \includegraphics[width=0.1\textwidth]{vendor/bgu-template/bgu.png}\\
+      \InstitutionName\\
+      \FacultyName\\
+      \DepartmentName
+
+      \vspace{1cm}
+
+      {\Large\bfseries \DocumentTitle}
+      \vspace{0.5cm}
+
+      Thesis submitted in partial fulfillment of the requirements\\
+      for the \DegreeName\ degree
+      \vspace{0.5cm}
+
+      \textbf{\AuthorName}
+      \vspace{0.5cm}
+
+      Under the supervision of \textbf{\AdvisorName}
+      \vspace{0.5cm}
+
+      \begin{flushleft}
+        Signature of student: \(\rule{3cm}{0.15mm}\) \hfill
+          Date: \(\rule{3cm}{0.15mm}\)\\
+        Signature of supervisor: \(\rule{3cm}{0.15mm}\) \hfill
+          Date: \(\rule{3cm}{0.15mm}\)\\
+        Signature of chairperson of the committee for graduate studies:
+          \(\rule{3cm}{0.15mm}\) \hfill Date: \(\rule{3cm}{0.15mm}\)
+      \end{flushleft}
+      \vfill
+
+      \ThesisMonth\ \ThesisYear
+    \end{center}
+  \end{titlepage}
+}
+
+\newcommand{\MakeBGUEnglishAbstract}{%
+  \thispagestyle{plain}
+  \begin{center}
+    {\Large\bfseries \DocumentTitle\par}
+    \vspace{0.4cm}
+    {\large \AuthorName\par}
+    \vspace{0.4cm}
+    {\large \DegreeName\ Thesis\par}
+    \vspace{0.2cm}
+    {\large \InstitutionName\par}
+    \vspace{0.2cm}
+    {\large \ThesisYear\par}
+    \vspace{0.9cm}
+    {\Large\bfseries Abstract\par}
+  \end{center}
+  \input{shared/abstract}
+}
+
+\newcommand{\MakeBGUHebrewCover}{%
+  \begin{titlepage}
+    \begin{center}
+      \vspace*{1cm}
+      \includegraphics[width=0.1\textwidth]{vendor/bgu-template/bgu.png}\\
+      \selectlanguage{hebrew}
+      אוניברסיטת בן-גוריון בנגב\\
+      \FacultyNameHebrew\\
+      \DepartmentNameHebrew
+      \vspace{2cm}
+
+      {\Large\bfseries \DocumentTitleHebrew}
+      \vspace{1.5cm}
+
+      חיבור זה מהווה חלק מהדרישות לקבלת התואר \DegreeNameHebrew
+      \vspace{1cm}
+
+      \textbf{\AuthorNameHebrew}
+      \vspace{1cm}
+
+      בהנחיית \textbf{\AdvisorNameHebrew}
+      \vfill
+
+      \ThesisMonthHebrew\quad
+      \selectlanguage{english}\ThesisYear
+    \end{center}
+  \end{titlepage}
+  \selectlanguage{english}
+}

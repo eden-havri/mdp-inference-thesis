@@ -80,9 +80,9 @@ variant rather than by a broader software package.
     Reported method & Implemented variant & Role \\
     \midrule
     REINFORCE & Monte Carlo policy gradient with learned state-value baseline
-      \citep{williams1992} & Basic on-policy baseline \\
+      \citep{williams1992} & On-policy score-function baseline \\
     PPO-Clip & Clipped surrogate, Monte Carlo advantages, entropy bonus; no GAE
-      or value clipping \citep{schulman2017} & Stronger on-policy baseline and
+      or value clipping \citep{schulman2017} & On-policy clipped-surrogate baseline and
       separately costed proposal trainer \\
     Discrete SAC & Categorical actor, twin critics, target critics, replay, and
       fixed entropy temperature \citep{christodoulou2019} & Off-policy
@@ -173,15 +173,36 @@ Tireworld work begins only after the GridWorld confirmatory manifest is frozen.
 \DocSubsection{Current empirical status}
 
 Confirmatory values are \textbf{TBD}.  Preliminary medium-GridWorld exact-value
-tempering diagnostics produced strong committed policies but exposed a sharp
-intermediate-temperature exchange bottleneck.  A 32-temperature, power-four,
-lazy-kernel pilot improved the minimum adjacent-swap acceptance to 0.236,
-reached a return effective sample size of 107 from 400 retained draws, and sent
-eight distinct walkers to the cold replica.  It nevertheless completed no full
-temperature round trip and left 11 policy coordinates without a retained-sample
-switch.  These are tuning diagnostics, not evidence that the method outperforms
-a competitor.  Full-scale arrays remain paused until longer warm and
-overdispersed chains pass the predeclared between-chain gate.
+tempering diagnostics produced high-return committed policies but exposed a sharp
+intermediate-temperature exchange bottleneck.  Four independent 32-temperature,
+power-four chains, including an overdispersed chain, each retained 800 draws.
+They failed the predeclared gate: split return \(\widehat R=1.096\), minimum
+per-chain return ESS of 10.5, minimum whole-run adjacent-swap acceptance of 0.049, no
+completed round trip, and maximum pairwise state-action total variation of 0.699.
+The principal warm-chain bottleneck lay between inverse temperatures 1.44 and
+1.98.  Because the legacy acceptance counter included burn-in, subsequent runs
+also store a separate post-burn rate; the ESS, round-trip, and between-chain
+failures do not depend on that counter.  A subsequent two-chain,
+4,000-iteration custom-ladder probe also failed.  Its warm chain had
+post-burn acceptance between 0.598 and 0.997 on every edge, but no walker
+traversed both endpoints.  In the overdispersed chain, replicas below the cold
+endpoint remained on a flat random-policy plateau near return \(-16\), while
+the cold replica remained near return \(1.1\); the final edge consequently
+accepted no swap.  High acceptance inside the bad plateau therefore did not
+indicate useful mixing.
+
+The next predeclared checkpoint tests the exact whole-policy refresh in
+Equation~\eqref{eq:global-policy-mh}, keeping the same ladder.  One
+overdispersed 1,000-iteration run must accept a policy-changing post-burn
+global proposal in the upper ladder quarter, accept a post-burn swap on the final edge, and send
+at least two walkers to the cold replica while sampling at least two distinct
+cold-replica policies.  Only then are one warm and one
+overdispersed 2,500-iteration chain run; both must traverse the ladder and
+every post-burn edge must accept at least \(0.20\).  These are tuning
+diagnostics, not evidence that the method outperforms a competitor.  They do
+not relax the later \(\widehat R\), ESS, round-trip, coordinate-agreement, and
+within-chain movement gate.  Full-scale comparison arrays remain paused until
+that full gate passes.
 
 \begin{table}[t]
   \centering

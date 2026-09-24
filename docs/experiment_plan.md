@@ -39,6 +39,44 @@ one beta on development map seed 0 before any held-out run; current development
 work uses `beta = 64`. Any secondary beta is labeled a target-sensitivity
 analysis and carries its own mixing and compute diagnostics.
 
+Replica-exchange tuning is development-only.  A four-chain power-ladder run
+first failed the full mixing gate.  A subsequent two-chain, 4,000-iteration
+custom-ladder probe also failed: the warm chain exchanged on every edge but
+completed no endpoint traversal, while the overdispersed chain had zero
+acceptance on the final edge.  The latter failure came from a flat sparse-reward
+basin: replicas 0--30 held random policies with return near \(-16\), while the
+cold replica held a guide-MAP policy near \(1.1\).  Adding temperatures would
+not address that combinatorial plateau.
+
+The predeclared repair is an exact whole-policy independence refresh, mixed
+with the existing single-site Metropolis--Hastings kernel, plus four cheap
+checkerboard swap sub-sweeps.  The first fail-fast run is one overdispersed
+chain with the same 32-level ladder, 1,000 iterations, 200 burn-in iterations,
+refresh probability 0.10, and proposal weights
+(MAP, guide product, uniform) = (0.25, 0.70, 0.05).  It passes only if the
+post-burn upper ladder quarter accepts at least one policy-changing global
+refresh, the final
+edge accepts at least one post-burn swap, and at least two distinct walkers
+reach the cold replica, with at least two distinct cold-replica policies
+sampled.  This is a rescue check, not a mixing check.
+
+If that run passes, one warm and one overdispersed chain run for 2,500
+iterations with 500 burn-in iterations.  Both must record an endpoint
+transition and every post-burn ladder edge must have swap acceptance at least
+0.20.  The only allowed predeclared adjustment is refresh probability
+0.10 to 0.25 when policy-changing global proposals are accepted but too rare.  If guide
+refreshes instead have negligible acceptance near the phase boundary, the next
+change is an exactly corrected guided block proposal, not weaker thresholds or
+more blind runtime.  A passing two-chain probe advances to four independently
+seeded 16,000-iteration chains with 4,000 burn-in iterations.  The full run
+must still pass split return
+\(\widehat R\leq1.05\), per-chain return ESS at least 100, post-burn acceptance
+at least 0.10 on every edge, at least four distinct cold-reaching walkers and
+one completed round trip per chain, maximum pairwise coordinate TV at most
+0.15, unique-policy fraction at least 0.10, and mean policy Hamming jump at
+least 0.01.  In addition, every coordinate with pooled nonmodal mass at least
+0.02 must switch in every chain.
+
 The policy-evaluation definition needs special care. Report these as distinct quantities when the method represents a distribution over deterministic policies:
 
 - **Complete-policy rollout:** sample one deterministic action for every state once per episode and retain it on revisits.

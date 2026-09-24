@@ -4,9 +4,10 @@ decision process.  The target is a Gibbs measure whose log density is
 proportional to a policy's expected return.  It is therefore different from a
 trajectory target that averages exponentiated realized returns, which is
 risk-sensitive even when the intended control objective is not.  Our primary
-algorithm is replica-exchange Metropolis--Hastings in policy space.  A learned
-PPO policy supplies full-support single-state proposals, but an exact Hastings
-correction prevents the guide from changing the invariant distribution.  When
+algorithm is replica-exchange Metropolis--Hastings in policy space.  A frozen
+PPO policy guides full-support single-state and whole-policy proposals, while
+exact Hastings corrections prevent the guide from changing the invariant
+distribution.  When
 the transition model is available, dynamic programming evaluates the exact
 target; with simulator-only access, an immutable bank of common random-number
 tapes defines a transparent sample-average approximation.  Direct variational

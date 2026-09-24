@@ -1,0 +1,17 @@
+[
+  {"map":"smoke-seed0.json","size":"4x4","wall_fraction":0.125,"slip_probability":0.1,"horizon":24,"reachable_fraction":1.0,"shortest_path_length":6,"shortest_path_count":4,"single_cell_bottleneck_count":2},
+  {"map":"smoke-seed1.json","size":"4x4","wall_fraction":0.125,"slip_probability":0.1,"horizon":24,"reachable_fraction":1.0,"shortest_path_length":6,"shortest_path_count":4,"single_cell_bottleneck_count":2},
+  {"map":"smoke-seed2.json","size":"4x4","wall_fraction":0.125,"slip_probability":0.1,"horizon":24,"reachable_fraction":1.0,"shortest_path_length":6,"shortest_path_count":12,"single_cell_bottleneck_count":0},
+  {"map":"easy-seed0.json","size":"8x8","wall_fraction":0.09375,"slip_probability":0.1,"horizon":64,"reachable_fraction":1.0,"shortest_path_length":14,"shortest_path_count":658,"single_cell_bottleneck_count":0},
+  {"map":"easy-seed1.json","size":"8x8","wall_fraction":0.09375,"slip_probability":0.1,"horizon":64,"reachable_fraction":1.0,"shortest_path_length":14,"shortest_path_count":1142,"single_cell_bottleneck_count":0},
+  {"map":"easy-seed2.json","size":"8x8","wall_fraction":0.09375,"slip_probability":0.1,"horizon":64,"reachable_fraction":1.0,"shortest_path_length":14,"shortest_path_count":435,"single_cell_bottleneck_count":2},
+  {"map":"medium-seed0.json","size":"16x16","wall_fraction":0.19921875,"slip_probability":0.2,"horizon":160,"reachable_fraction":0.9951219512,"shortest_path_length":30,"shortest_path_count":14816,"single_cell_bottleneck_count":1},
+  {"map":"medium-seed1.json","size":"16x16","wall_fraction":0.19921875,"slip_probability":0.2,"horizon":160,"reachable_fraction":0.9853658537,"shortest_path_length":30,"shortest_path_count":390440,"single_cell_bottleneck_count":3},
+  {"map":"medium-seed2.json","size":"16x16","wall_fraction":0.19921875,"slip_probability":0.2,"horizon":160,"reachable_fraction":0.9756097561,"shortest_path_length":30,"shortest_path_count":302814,"single_cell_bottleneck_count":2},
+  {"map":"hard-seed0.json","size":"32x32","wall_fraction":0.2998046875,"slip_probability":0.25,"horizon":384,"reachable_fraction":0.9581589958,"shortest_path_length":62,"shortest_path_count":242880,"single_cell_bottleneck_count":12},
+  {"map":"hard-seed1.json","size":"32x32","wall_fraction":0.2998046875,"slip_probability":0.25,"horizon":384,"reachable_fraction":0.9776847978,"shortest_path_length":66,"shortest_path_count":2004192,"single_cell_bottleneck_count":17},
+  {"map":"hard-seed2.json","size":"32x32","wall_fraction":0.2998046875,"slip_probability":0.25,"horizon":384,"reachable_fraction":0.9483960948,"shortest_path_length":62,"shortest_path_count":15493680,"single_cell_bottleneck_count":1},
+  {"map":"easy-seed3.json","size":"8x8","wall_fraction":0.09375,"slip_probability":0.1,"horizon":64,"reachable_fraction":1.0,"shortest_path_length":14,"shortest_path_count":546,"single_cell_bottleneck_count":1},
+  {"map":"medium-seed3.json","size":"16x16","wall_fraction":0.19921875,"slip_probability":0.2,"horizon":160,"reachable_fraction":1.0,"shortest_path_length":32,"shortest_path_count":600,"single_cell_bottleneck_count":5},
+  {"map":"hard-seed3.json","size":"32x32","wall_fraction":0.2998046875,"slip_probability":0.25,"horizon":384,"reachable_fraction":0.9651324965,"shortest_path_length":72,"shortest_path_count":176514060,"single_cell_bottleneck_count":2}
+]

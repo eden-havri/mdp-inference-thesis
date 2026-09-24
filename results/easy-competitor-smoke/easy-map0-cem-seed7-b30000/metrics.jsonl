@@ -1,0 +1,2 @@
+{"best_policy_return": -6.399999999999993, "completed_population": 64.0, "elite_mean_return": -6.399999999999992, "generation": 0.0, "mean_policy_return": -6.399999999999992, "sampling_entropy": 75.56207179048529, "transitions": 16384.0, "updated": 1.0}
+{"best_policy_return": -6.399999999999993, "completed_population": 53.0, "elite_mean_return": 0.0, "generation": 1.0, "mean_policy_return": -6.3999999999999915, "sampling_entropy": 75.56207179048529, "transitions": 30016.0, "updated": 0.0}

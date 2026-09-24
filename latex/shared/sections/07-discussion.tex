@@ -17,6 +17,15 @@ on every edge, multiple dispersed chains, policy-coordinate diagnostics, and
 explicit nonconvergence decisions are therefore part of the method rather than
 optional presentation details.
 
+Sparse rewards are a general exploration difficulty
+\citep{andrychowiczEtAl2017}.  Here they also create broad policy plateaus:
+when two policies have the same score, changing the inverse temperature cannot
+prefer one over the other.  The whole-policy refresh can cross such a plateau
+without changing the target, but an independence sampler can still be
+inefficient when its frozen proposal poorly covers target mass
+\citep{mengersenTweedie1996}.  Its acceptance and flow diagnostics therefore
+remain mandatory.
+
 The two evaluation modes have different claims.  Dynamic programming gives an
 exact target but requires the model.  Fixed-tape sample-average inference needs
 only a generative simulator, but its finite-\(K\) target differs from the

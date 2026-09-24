@@ -136,9 +136,11 @@ q_\theta(\pi)>0.
 Complementary Candidate A enforces this directly in \(q_\theta\). Complementary
 Candidate B enforces it with the explicit uniform mixture in Section 6.2, even if
 its learned guide assigns zero probability to an action. The primary sampler uses
-the analogous mixture in (RE-5) and the exact conditional proposal in (RE-6).
-All actual proposal probabilities must be computed stably and must cover the
-reference support.
+the analogous local mixture in (RE-5) and the exact conditional proposal in
+(RE-6). Its whole-policy proposal (RE-9) has an explicit positive uniform
+component. All actual proposal probabilities, including the probability of the
+complete overlapping mixture in (RE-9), must be computed stably and must cover
+the reference support.
 
 ### A5. RNG separation
 
@@ -257,7 +259,7 @@ marginal. Its expected rollout count per new weight is \(\lambda\), while
 
 Thus a stable weight can require cost growing quadratically in \(\beta\) and
 the return range. Replica exchange would also need a correct extended-state
-swap or refresh kernel, not the deterministic-score swap in (RE-10). This
+swap or refresh kernel, not the deterministic-score swap in (RE-13). This
 extension must pass weight-variance, zero/overflow, exact-enumeration, and
 mixing gates before being promoted; until then the implemented modes remain
 the exact-model target and the explicitly approximate fixed-tape target.
@@ -270,7 +272,7 @@ Use \(L\ge2\) inverse temperatures
 0=\beta_0<\beta_1<\cdots<\beta_{L-1}=\beta.
 \]
 
-The implemented power ladder is
+The default initialization is the power ladder
 
 \[
 \beta_\ell
@@ -291,11 +293,23 @@ p_{\beta_\ell}^{\widetilde J}(d\pi)
 
 and the joint target is the product of (RE-4) over replicas. Thus the hottest
 replica samples the reference measure and the coldest samples the declared target.
-The number and placement of temperatures are efficiency choices, not target
-changes. They must be selected on pilot instances and frozen before confirmatory
-runs.
+The implementation also accepts an explicitly listed, strictly increasing
+ladder with the same endpoints. This permits development-only feedback from
+measured exchange bottlenecks: add density where replica flow stalls, then stop
+adaptation and freeze the complete ladder before collecting retained or
+confirmatory samples. The number and placement of temperatures are efficiency
+choices, not target changes. They must be selected on pilot instances and frozen
+before confirmatory runs.
 
-### 4.3 Guided single-site proposal and local acceptance
+### 4.3 Fixed mixture of local and whole-policy proposals
+
+Each active sweep makes exactly one policy proposal at each replica. With fixed
+probability \(1-\rho\), that proposal is the guided single-site update below; with
+probability \(\rho\), it is the whole-policy independence refresh defined later in
+this section. The default is \(\rho=0.10\). This mixture is fixed before a run and
+is not adapted from its history.
+
+#### Guided single-site branch
 
 Let \(D\) be the number of decision states. At a local update, select one decision
 state \(s\) uniformly. Let \(g_\phi(a\mid s)\) be a frozen stochastic guide and
@@ -358,19 +372,91 @@ unmixed guide, or changing the guide during a run changes the transition kernel
 and invalidates the stated guarantee. With full support, repeated single-site
 moves connect the finite Cartesian policy space.
 
-The implementation makes a complete local-update-plus-swap sweep lazy. With a
+#### Whole-policy independence-refresh branch
+
+Let \(\pi_{\phi}^{\mathrm{MAP}}\) be the deterministic statewise mode of the
+frozen PPO guide; it is not an oracle maximizer of \(J\). Define the fixed
+whole-policy proposal
+
+\[
+Q(\pi)
+=w_{\mathrm{map}}\,\mathbf 1\{\pi=\pi_{\phi}^{\mathrm{MAP}}\}
++w_{\mathrm{guide}}\prod_{s\in\mathcal D}g_\phi(\pi(s)\mid s)
++w_{\mathrm{uniform}}\prod_{s\in\mathcal D}
+  \frac{1}{|\mathcal A_\mu(s)|}.
+\tag{RE-9}
+\]
+
+Here \(\mathcal D\) is the decision-state set and
+\(\mathcal A_\mu(s)\) is the prior-supported action set. The default weights are
+
+\[
+(w_{\mathrm{map}},w_{\mathrm{guide}},w_{\mathrm{uniform}})
+=(0.25,0.70,0.05).
+\]
+
+The three components overlap, so \(Q(\pi)\) is the **sum** of all applicable
+component probabilities, not merely the probability of the component that
+generated the draw. It is evaluated by log-sum-exp, with impossible component
+terms represented by \(-\infty\). The positive uniform weight gives every policy
+in the finite reference support positive proposal probability even if the guide
+contains zeros.
+
+Because this is an independence proposal, replica \(\ell\) accepts a complete
+proposal \(\pi'\sim Q\) with
+
+\[
+\alpha_\ell^{\mathrm{global}}(\pi,\pi')
+=\min\!\left\{1,
+\exp\!\left[
+  \beta_\ell\{\widetilde J(\pi')-\widetilde J(\pi)\}
+  +\log\mu(\pi')-\log\mu(\pi)
+  +\log Q(\pi)-\log Q(\pi')
+\right]
+\right\}.
+\tag{RE-10}
+\]
+
+The full Hastings correction in (RE-10) is mandatory and is computed in log
+space. The active within-replica kernel is therefore
+
+\[
+K_\ell^{\mathrm{active}}
+=(1-\rho)K_\ell^{\mathrm{site}}+\rho K_\ell^{\mathrm{global}},
+\qquad \rho=0.10\ \text{by default}.
+\tag{RE-11}
+\]
+
+Both branches leave (RE-4) invariant. In addition, on the finite policy space the
+uniform component makes the independence kernel uniformly ergodic under the usual
+fixed-target conditions (Mengersen and Tweedie, 1996). This is an asymptotic
+guarantee, not evidence that a finite run has mixed: in a large policy space the
+global acceptance probability may still be very small. The frozen guide and its
+mode affect efficiency only; neither can change the target.
+
+The implementation makes a complete within-replica-plus-swap sweep lazy. With a
 fixed probability \(0<\delta<1\), it applies the identity kernel to all replicas;
 otherwise it applies the next active replica-exchange sweep. Equivalently,
-\(K_{\delta}=\delta I+(1-\delta)K\). This state-independent mixture preserves the
-product target and supplies a positive self-transition even in a two-action domain,
-where a forced-different local proposal can otherwise be periodic. Swap parity and
-the swap interval advance only on active sweeps. The default \(\delta=0.05\), the
-realized number of lazy sweeps, and all active proposal counts are stored per run.
+
+\[
+K_{\delta}=\delta I+(1-\delta)K.
+\tag{RE-12}
+\]
+
+This state-independent mixture preserves the product target and supplies a
+positive self-transition even in a two-action domain, where a forced-different
+local proposal can otherwise be periodic. Swap parity and the swap interval
+advance only on active sweeps. The default \(\delta=0.05\), the realized number
+of lazy sweeps, and all active local and global proposal counts are stored per run.
 
 ### 4.4 Adjacent replica swaps
 
-At a declared interval, propose exchanges between disjoint adjacent replica pairs,
-alternating even and odd edges. For adjacent states \(\pi_\ell\) and
+At a declared interval, perform four checkerboard swap sub-sweeps by default.
+Each sub-sweep proposes exchanges between disjoint adjacent replica pairs, and
+parity alternates between even and odd edges. Multiple sub-sweeps let a
+configuration travel farther through the ladder during one active sweep without
+another policy-value evaluation; compositions of invariant swap kernels remain
+invariant (see Chodera and Shirts, 2011). For adjacent states \(\pi_\ell\) and
 \(\pi_{\ell+1}\), accept their exchange with probability
 
 \[
@@ -383,20 +469,22 @@ alternating even and odd edges. For adjacent states \(\pi_\ell\) and
 \{\widetilde J(\pi_\ell)-\widetilde J(\pi_{\ell+1})\}
 \right]
 \right\}.
-\tag{RE-9}
+\tag{RE-13}
 \]
 
-Equation (RE-9) assumes every replica uses the same \(\mu\), score function, and
-fixed tape bank. Local moves satisfying (RE-7) and swaps satisfying (RE-9) each
-leave the joint product target invariant; samples retained from replica \(L-1\)
-after burn-in therefore have the cold target as their invariant marginal.
+Equation (RE-13) assumes every replica uses the same \(\mu\), score function, and
+fixed tape bank. The local kernel (RE-7), global kernel (RE-10), fixed branch
+mixture (RE-11), and swaps (RE-13) each leave the appropriate target invariant;
+samples retained from replica \(L-1\) after burn-in therefore have the cold target
+as their invariant marginal. Every edge attempt and acceptance is counted,
+including every checkerboard sub-sweep.
 
 ### 4.5 Initialization, burn-in, and retained samples
 
 All replicas may be initialized at a guide-derived policy, such as the guide MAP.
 Alternatively, hot replicas may be initialized from \(\mu\) as an overdispersed
-diagnostic. Initialization changes neither (RE-7), (RE-9), nor the invariant
-distribution, but it can materially affect finite-run bias and time to stationarity.
+diagnostic. Initialization changes neither (RE-7), (RE-10), (RE-13), nor the
+invariant distribution, but it can materially affect finite-run bias and time to stationarity.
 The \(\beta_0=0\) replica must be allowed to forget a warm start during burn-in;
 warm initialization is not evidence of convergence.
 
@@ -411,11 +499,15 @@ separate, explicit experimental factor.
 Return ESS alone is insufficient because distinct policies can have identical or
 nearly identical returns. Every pilot records at least:
 
-- local proposal and acceptance counts at every temperature;
-- swap proposal and acceptance counts on every ladder edge;
+- local and global proposal and acceptance counts at every temperature,
+  including a separate count of accepted policy-changing global moves, reported
+  for both the complete and post-burn windows;
+- swap proposal and acceptance counts on every ladder edge, reported both for
+  the complete run and separately after burn-in;
 - walker temperature-visit fractions, endpoint transitions, completed round trips,
   and the number of distinct walkers reaching the cold replica;
-- cold-chain return ESS and action-indicator ESS for every decision-state/action;
+- cold-chain return ESS, the conservative action-indicator ESS, and its
+  across-state quantiles;
 - per-state action-switch rates, distinct-policy count, and mean Hamming jump; and
 - agreement across independently seeded warm and overdispersed chains, including a
   predeclared multichain diagnostic where estimable.
@@ -434,7 +526,7 @@ must be set before confirmatory outcomes are viewed.
 With \(I\) total iterations, \(N_{\mathrm{lazy}}\) realized lazy sweeps, and
 \(L\) temperatures, the current implementation performs
 \(L+L(I-N_{\mathrm{lazy}})\) policy-value evaluations: \(L\) initial evaluations
-and one local proposal evaluation per replica per active sweep. Its expectation is
+and one local or global proposal evaluation per replica per active sweep. Its expectation is
 \(L+L(1-\delta)I\). Swaps reuse cached values and incur no additional policy
 evaluation. In exact-model mode, each evaluation includes one finite-horizon
 dynamic program. In fixed-tape mode, each evaluation uses \(K\) rollouts and at
@@ -824,8 +916,9 @@ the stated reward-scaling properties under A1 and the chosen \(\mu\).
 
 ### T2. Replica-exchange invariance and convergence conditions
 
-For both choices in (RE-1), prove detailed balance of (RE-7), detailed balance of
-(RE-9) with respect to the product target, and invariance of the cold marginal.
+For both choices in (RE-1), prove detailed balance of (RE-7) and (RE-10),
+invariance of their fixed mixture (RE-11), detailed balance of (RE-13) with
+respect to the product target, and invariance of the cold marginal.
 State the precise irreducibility and aperiodicity conditions needed for convergence.
 Show that warm and overdispersed initialization alter only the initial law, not the
 invariant law. For fixed tapes, the claim is conditional correctness for (RE-2),
@@ -930,18 +1023,23 @@ transitions, absorbing states, and multimodality while remaining exact.
 11. Log-mean-exp and ESS calculations are stable for extreme finite logits.
 12. NaN, infinite reward, zero particles, zero tapes, invalid probabilities, and
     unsupported actions fail before training starts.
-13. Every replica-exchange proposal row has full support on legal alternative
-    actions, and its recorded forward and reverse probabilities equal (RE-6).
-14. Swap scheduling proposes only disjoint adjacent pairs and alternates parity
-    without changing the random stream used by local moves.
-15. Diagnostic collection is observational: enabling it cannot alter policies,
+13. Every replica-exchange local proposal row has full support on legal
+    alternative actions, and its recorded forward and reverse probabilities
+    equal (RE-6).
+14. The whole-policy proposal equals the complete overlapping mixture (RE-9),
+    has full support, and its log probability is evaluated stably for both the
+    current and proposed policies.
+15. Swap sub-sweeps propose only disjoint adjacent pairs, alternate parity, and
+    record endpoint visits that occur between sub-sweeps.
+16. Diagnostic collection is observational: enabling it cannot alter policies,
     accept/reject decisions, or retained samples under the same seed.
 
 ### 8.3 Replica-exchange sampler tests
 
-On enumerable policy spaces, construct the local and swap transition kernels
-directly. Verify that rows sum to one, (RE-7) and (RE-9) satisfy detailed balance,
-and the product distribution in (RE-4) is invariant to float64 tolerance. Test
+On enumerable policy spaces, construct the local, global, and swap transition
+kernels directly. Verify that rows sum to one, (RE-7), (RE-10), and (RE-13)
+satisfy detailed balance, and the product distribution in (RE-4) is invariant
+to float64 tolerance. Test
 uniform and nonuniform guide rows, multiple guide strengths, nonuniform reference
 mass in the mathematical oracle, and both exact-model and fixed-tape scores. The
 implemented uniform-reference restriction must reject unsupported nonuniform
@@ -1166,13 +1264,15 @@ Every run must save, atomically where practical:
   score semantics;
 - \(\beta\), and, when applicable, \(K\), \(N\), and the tape-bank checksum;
 - for replica exchange: the complete beta ladder, ladder construction, iteration
-  count, burn-in, thinning, swap interval, initialization mode and policy checksum,
-  guide strength, and every frozen guide probability row;
+  count, burn-in, thinning, swap interval, swap sub-sweep count, initialization
+  mode and policy checksum, guide strength, global-refresh probability and
+  mixture weights, and every frozen guide probability row;
 - the PPO proposal checkpoint, action mask, \(\epsilon\), and whether the guide was
   frozen or adapted between sweeps;
-- local and swap proposal/acceptance counts, walker visits and round trips,
-  action-occupancy diagnostics, retained complete policies, policy-value evaluation
-  count, and simulator-transition count;
+- full-run and post-burn local, global-refresh, and swap proposal/acceptance
+  counts, separate accepted policy-changing global-move counts, walker visits
+  and round trips, action-occupancy summaries, retained complete policies,
+  policy-value evaluation count, and simulator-transition count;
 - guide/proposal training, sampler, and SMC simulator interactions, optimizer
   updates, wall-clock time, accelerator time, and peak memory as separate and total
   costs;
@@ -1198,8 +1298,9 @@ an oracle domain must not be described as untuned on that domain.
 4. Implement immutable time-indexed tape banks, validate (RE-2) by enumeration, and
    establish K adequacy through G7 before using fixed-tape results as an
    approximation to (1).
-5. Add the frozen full-support guide to local proposals and repeat all detailed-
-   balance and mixing tests at the guide strengths intended for experiments.
+5. Add the frozen full-support guide to local proposals and the corrected
+   whole-policy independence refresh; repeat all detailed-balance and mixing
+   tests at the guide strengths and mixture weights intended for experiments.
 6. Profile the smallest representative run, verify exact resume, freeze diagnostic
    thresholds and retuning limits, and authorize only the next fail-fast pilot.
 7. Maintain complementary Candidate A as an independent objective and gradient

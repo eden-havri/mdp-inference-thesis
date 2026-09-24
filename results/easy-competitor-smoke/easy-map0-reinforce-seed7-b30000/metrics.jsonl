@@ -1,0 +1,4 @@
+{"actor_loss": -4.072239685789677, "mean_episode_return": -6.0874999999999995, "transitions": 1024.0, "update": 0.0, "value_loss": 13.506249999999994}
+{"actor_loss": -3.446527783473474, "mean_episode_return": -6.06875, "transitions": 11157.0, "update": 10.0, "value_loss": 10.970281426249846}
+{"actor_loss": -2.948581429590423, "mean_episode_return": -6.0562499999999995, "transitions": 21259.0, "update": 20.0, "value_loss": 9.131799949364952}
+{"actor_loss": -2.3683358014605465, "mean_episode_return": -5.808333333333333, "transitions": 30039.0, "update": 29.0, "value_loss": 7.550677491757335}
