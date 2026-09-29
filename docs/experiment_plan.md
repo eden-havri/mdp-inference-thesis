@@ -1,11 +1,34 @@
 # Fail-fast experiment and Slurm plan
 
+## Current decision (29 September 2026)
+
+Latest execution record: `inference_selection_2026-09-29.md`. The bounded
+selection and optimization screens are complete. K=1 direct policy ELBO is
+the next practical candidate for end-to-end validation, not a declared final
+winner. `strict_budget_contract.md` specifies the implemented total cap and
+the frozen two-map canary. Historical minimum-budget results remain historical.
+
+The later alignment decision in `research_alignment_2026-09-29.md` takes
+precedence: competitive control and a useful, correct policy-inference
+formulation are sufficient goals; uniform superiority is not a requirement.
+Diagnostics must match the claim and inference engine. MCMC mixing tests are
+not prerequisites for every variational or SMC experiment. No new primary
+engine has been selected, and historical MCMC failures remain failures.
+
+The research reassessment in `reassessment_2026-09-29.md` supersedes stale
+forward-looking rescue instructions below. Whole-policy, structural-block,
+and path-bank pilots have not passed mixing. The first guide-field bridge
+also remained initialization-dependent. No confirmatory arrays are authorized
+by these results. Resolve information access, native baseline execution,
+total-budget enforcement, and attribution of behavior/cost beyond PPO before scaling.
+The original gate outcomes and thresholds remain historical evidence.
+
 ## Purpose and decision rule
 
 The experiment program should answer two separate questions:
 
 1. **Correctness:** does the current method implement the claimed distribution over complete policies and produce valid estimates?
-2. **Performance:** under the same simulator access and number of environment transitions, does it learn policies that are better or more reliable than standard policy-gradient and entropy-regularized baselines?
+2. **Practical value:** under matched information and total cost, how competitive is control, what behaviors differ, and what are the trade-offs relative to standard baselines? Winning every case is not a pass condition.
 
 No large cluster run should start until the corresponding smaller stage passes. The primary resource budget is the number of **logical environment transitions represented by training**, with wall-clock time, peak memory, and simulator calls logged as additional costs. For a particle method, a sweep with `N` particles and horizon `H` consumes `N * H` logical transitions even if vectorization or shared randomness reduces the number of function invocations.
 
@@ -13,8 +36,11 @@ The confirmatory result is fixed-budget performance on held-out maps. Hyperparam
 
 Comparisons are stratified by information access. Exact-model tempering is used
 for target-fidelity and mixing claims against exact known-model controls.
-Simulator-only fixed-tape tempering is compared with the five learned
-competitors under matched transition budgets. Exact-model results may be shown
+Fixed-tape tempering qualifies as simulator-only only when proposal construction
+also avoids exact-model queries. Current structural blocks are model-assisted.
+Eligible variants are compared with the five learned competitors under matched
+total transition budgets, including guide training and inference. The existing
+guide-training budget field is not such a cap. Exact-model results may be shown
 next to model-free learners only as a descriptive reference, never as evidence
 of superior sample efficiency. Model evaluations, simulator transitions, and
 guide-training transitions remain separate cost columns.
@@ -106,7 +132,7 @@ seed.
 Implement and validate baselines in this order. Do not begin tuning the next learned baseline until the previous gate passes.
 
 1. **Random policy.** This establishes reward scale, chance success, and evaluator health. Evaluate exactly when feasible.
-2. **Exact finite-horizon oracle.** Dynamic programming gives the attainable upper bound under the same transition, reward, horizon, and policy class. Also retain an exact soft/entropy-regularized oracle as a diagnostic when comparing action marginals.
+2. **Exact finite-horizon oracle.** Dynamic programming gives a nonstationary upper control under the same transitions, rewards, and horizon. The implemented learned policy class is stationary, so this bound need not be attainable by that class. Retain a soft/entropy-regularized oracle only as a separately labeled diagnostic when comparing action marginals.
 3. **REINFORCE.** Use a learned or state-dependent baseline if desired, but record the variant explicitly. Its simplicity makes it the first end-to-end gradient and budget-accounting test.
 4. **PPO.** Add only after REINFORCE learns the easy tier. Log clipping rate, approximate divergence, policy entropy, and value loss.
 5. **Double Q-learning.** Use time-indexed value tables for correct finite-horizon targets and report the declared stationary projection.

@@ -146,12 +146,30 @@ def audit_baseline_gate(manifest_path: Path) -> dict[str, Any]:
             and transition_budget is not None
             and simulator_steps >= transition_budget
         )
+        if row.get("strict_transition_budget", False):
+            # Strict runs reserve H-1 transitions for the last complete episode.
+            # Do not apply the historical minimum-budget rule to hard caps.
+            saved_map = _load_json(run_dir / "map.json") if not missing_artifacts else {}
+            horizon = saved_map.get("horizon")
+            valid_horizon = isinstance(horizon, int) and not isinstance(horizon, bool) and horizon > 0
+            threshold = (
+                transition_budget if row.get("method") == "double_q"
+                else transition_budget - horizon + 1
+                if transition_budget is not None and valid_horizon else None
+            )
+            budget_reached = (
+                threshold is not None and simulator_steps is not None
+                and transition_budget is not None and valid_horizon
+                and transition_budget >= horizon
+                and threshold <= simulator_steps <= transition_budget
+                and result.get("transition_budget_semantics") == "hard_cap_all_training_simulator_transitions"
+            )
         oracle_bounded = committed is not None and oracle is not None and committed <= oracle + 1e-10
         beats_random = (
             committed is not None and random_value is not None and committed > random_value
         )
         if not budget_reached and not missing_values:
-            failures.append("training transition budget was not reached")
+            failures.append("training transition budget contract was not met")
         if not result_budget_matches_manifest and transition_budget is not None:
             failures.append("result transition budget does not match the manifest")
         if not oracle_bounded and committed is not None and oracle is not None:

@@ -15,12 +15,25 @@ risk-sensitive objective.
 
 ## Current method
 
-The primary corrected sampler is guided replica-exchange Metropolis--Hastings
+The most developed sampler is guided replica-exchange Metropolis--Hastings
 over complete policies. A PPO policy supplies proposals and an initializer;
 the Hastings correction preserves the declared Gibbs target. Exact dynamic-
 programming returns are used when the transition model is available. A fixed-
 tape sample-average variant is available for simulator-only studies and is
 reported explicitly as an approximation.
+
+This sampler is one inference engine, not the definition of the thesis idea.
+The current research decision compares it with the existing variational and
+particle alternatives before selecting a final engine. Competitive control and
+useful behavioral distinctions are the goal, not universal reward superiority.
+See `docs/research_alignment_2026-09-29.md` for the evidence and bounded next step.
+
+The latest bounded screen advances PPO-initialized **direct variational policy
+inference with one rollout per sampled policy** to end-to-end validation; it
+does not yet select a final benchmark winner or establish posterior fidelity.
+See `docs/inference_selection_2026-09-29.md`. New VI and baseline experiments
+can enforce strict total transition caps, including guide training, with
+`strict_transition_budget: true`; see `docs/strict_budget_contract.md`.
 
 Complementary implementations include direct expected-return ELBO training,
 replicated policy SMC, single-chain policy MH, and a restricted policy bank.
@@ -36,7 +49,8 @@ and finite-horizon dynamic programming are reported separately.
 - `experiments/`: frozen maps and fail-fast JSONL manifests.
 - `docs/`: method contract, competitor contract, experiment plan, domain study,
   and scaling plan.
-- `latex/`: shared scientific content with paper and BGU thesis wrappers.
+- `latex/`: a concise paper and a detailed BGU thesis sharing definitions,
+  metadata and references, with distinct narratives.
 - `slurm/`: BGU cluster setup and capped-array scripts.
 
 ## Local setup and checks

@@ -6,6 +6,7 @@ from mdp_inference.exact import exact_saa_posterior
 from mdp_inference.examples import two_step_choice_mdp, zero_mean_variance_mdp
 from mdp_inference.mdp import FiniteHorizonMDP, TapeBank
 from mdp_inference.replicated_smc import ReplicatedSMCConfig, run_replicated_policy_smc
+import mdp_inference.replicated_smc as smc_module
 
 
 def test_replicated_smc_matches_exact_saa_marginals() -> None:
@@ -48,6 +49,33 @@ def test_return_is_averaged_before_particle_weighting() -> None:
     )
     marginal = result.marginal_action_probabilities(mdp)[0]
     assert abs(float(marginal[1]) - 0.5) < 0.03
+
+
+def test_duplicated_ancestors_have_independent_future_policy_assignments(monkeypatch) -> None:
+    # Force all descendants to share one ancestor, then encounter a new state.
+    # Their past must agree, but their future mutable policy storage must not alias.
+    transition = np.zeros((2, 2, 2))
+    transition[:, :, 1] = 1.0
+    mdp = FiniteHorizonMDP(
+        transition, np.zeros_like(transition), np.array([1.0, 0.0]), horizon=3,
+    )
+    calls = 0
+
+    def controlled_resampling(probabilities, _rng):
+        nonlocal calls
+        calls += 1
+        return np.zeros(len(probabilities), dtype=int) if calls == 1 else np.arange(len(probabilities))
+
+    monkeypatch.setattr(smc_module, "systematic_resample", controlled_resampling)
+    result = run_replicated_policy_smc(
+        mdp, TapeBank.sample(1, mdp.horizon, seed=2),
+        ReplicatedSMCConfig(num_particles=512, ess_threshold_ratio=1.0, seed=730),
+        proposal_probabilities=np.array([[0.9, 0.1], [0.5, 0.5]]),
+    )
+    assert result.resampled[0]
+    assert result.root_ancestor_count == 1
+    assert np.unique(result.policies[:, 0]).size == 1
+    assert 0.4 < result.policies[:, 1].mean() < 0.6
 
 
 def test_smc_normalizer_is_unbiased_for_fixed_tapes() -> None:

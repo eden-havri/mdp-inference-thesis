@@ -127,3 +127,19 @@ def test_baseline_gate_rejects_method_hyperparameter_mismatch(tmp_path: Path) ->
     assert audit["passed"] is False
     assert audit["runs"]["run"]["checks"]["config_matches_manifest"] is False
     assert "learning_rate" in audit["runs"]["run"]["failures"][0]
+
+
+@pytest.mark.parametrize("steps,passed", [(95, False), (96, True), (100, True), (101, False)])
+def test_strict_budget_audit_checks_both_cap_and_reserved_utilization(tmp_path, steps, passed):
+    row = _write_run(tmp_path / "results", "strict", simulator_steps=steps)
+    row["strict_transition_budget"] = True
+    root = tmp_path / "results" / "strict"
+    (root / "config.json").write_text(json.dumps(row), encoding="utf-8")
+    (root / "map.json").write_text(json.dumps({"horizon": 5}), encoding="utf-8")
+    result = json.loads((root / "result.json").read_text())
+    result["transition_budget_semantics"] = "hard_cap_all_training_simulator_transitions"
+    (root / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    manifest = tmp_path / "manifest.jsonl"
+    _write_manifest(manifest, [row])
+    audit = audit_baseline_gate(manifest)
+    assert audit["runs"]["strict"]["checks"]["budget_reached"] is passed

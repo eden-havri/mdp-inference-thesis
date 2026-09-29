@@ -72,7 +72,7 @@ def test_enabled_block_refresh_persists_catalog_and_counters(
             mcmc_thinning=2,
             mcmc_temperatures=2,
             mcmc_global_refresh_probability=0.0,
-            mcmc_block_refresh_probability=1.0,
+            mcmc_block_refresh_probability=0.9,
             mcmc_seed=23,
         )
     )
@@ -83,7 +83,7 @@ def test_enabled_block_refresh_persists_catalog_and_counters(
     mdp = gridworld_mdp(spec)
 
     assert result["result_schema_version"] == 4
-    assert result["mcmc_block_refresh_probability"] == 1.0
+    assert result["mcmc_block_refresh_probability"] == 0.9
     assert result["mcmc_block_repeats"] == [1] * len(catalog)
     assert result["mcmc_block_catalog_artifact"] == "mcmc_block_catalog.npy"
     assert result["mcmc_block_catalog_kind"] == RECOVERY_BLOCK_CONSTRUCTION

@@ -1,7 +1,7 @@
 \DocSection{Exact Validation Framework}
 \label{sec:validation}
 
-Correct implementation of an MCMC transition does not establish that the
+Correct implementation of a gradient or MCMC transition does not establish that the
 intended density was specified.  Validation therefore starts with finite MDPs
 for which all \(|\mathcal A|^D\) stationary deterministic policies can be
 enumerated, where \(D\) is the number of decision states.  Finite-horizon
@@ -26,17 +26,24 @@ replica-exchange samplers must agree with the enumerated target on tiny MDPs.
 
 \DocSubsection{Fail-fast gates}
 
-Experiments advance only after the preceding gate passes:
+Experiments advance through checks appropriate to their inference engine.
+Mechanics, target definition and cost apply to every implementation; finite-bank
+and mixing checks apply only to the corresponding sampling variants. For
+variational inference, gradient correctness, optimization progress and family
+error replace a requirement to pass MCMC transport diagnostics:
 \begin{enumerate}[label=G\arabic*.]
   \item \textbf{Mechanics.} Transition rows, rewards, termination, horizons,
         seeded replay, artifact writing, and budget counters pass unit tests.
   \item \textbf{Target.} Enumeration verifies exact probabilities, modes,
         marginals, local and whole-policy acceptance ratios, and swap
         acceptance ratios.
-  \item \textbf{Approximation.} Increasing the immutable tape-bank size
+  \item \textbf{Approximation.} For variational inference, compare exact and
+        sampled gradients, measure optimization progress, and characterize the
+        restricted-family gap on enumerable instances. For fixed-bank methods,
+        increasing the immutable tape-bank size
         reduces sample-average target error on repeated small problems; a
         failure stops simulator-only scaling.
-  \item \textbf{Mixing.} A one-chain rescue check first requires an accepted,
+  \item \textbf{Mixing (MCMC only).} A one-chain rescue check first requires an accepted,
         policy-changing whole-policy refresh in the upper quarter of the
         inverse-temperature ladder, an accepted final-edge swap,
         more than one cold-reaching walker, and at least two sampled cold-replica

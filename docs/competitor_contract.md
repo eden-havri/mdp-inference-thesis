@@ -37,10 +37,11 @@ must augment the policy input for every method.
 
 ## Fair-comparison rules
 
-1. The common primary evaluation samples one complete deterministic policy
-   from the reported statewise probabilities and commits to it for the whole
-   episode. Per-visit stochastic execution and the statewise MAP policy are
-   reported separately.
+1. The committed-policy study samples one complete deterministic policy and
+   retains it for the episode. This changes the native deployment of stochastic
+   baselines. Practical-control tables must also report native per-visit
+   stochastic execution as a co-primary metric for REINFORCE, PPO, and SAC.
+   Never describe committed-policy baseline scores as native behavior.
 2. Every method uses the same maps, training-seed list, horizons, rewards, and
    evaluation streams.
 3. Tuning allowance is matched in both environment transitions and core-hours.
@@ -67,11 +68,15 @@ Results are never pooled across unequal information access:
   tempering is compared with exact enumeration or other known-model controls.
   This is the primary test of whether the desired policy distribution is
   sampled correctly.
-- **Simulator-only control:** fixed-tape sample-average tempering and all
-  learned competitors receive the same generative simulator and matched
-  training-transition allowance. This is the like-for-like control comparison,
+- **Simulator-only control:** direct policy ELBO (including simulator-trained
+  PPO initialization), or fixed-tape sample-average tempering without
+  exact-model structural construction and learned competitors receive the same
+  generative-simulator access and matched total allowance. This is the control comparison,
   while explicitly recognizing that finite-tape inference targets an
   approximation to the expected-return Gibbs distribution.
+- **Model-assisted rollout scoring:** fixed-tape runs with the current modal
+  path/recovery catalog also query exact successor probabilities. They belong
+  to their own model-assisted stratum, not the simulator-only comparison.
 - **Cross-stratum results:** exact-model tempering may be shown beside
   simulator-only learners to explain attainable behavior or computational
   tradeoffs, but it is labeled descriptive and cannot support a sample-efficiency
@@ -81,6 +86,18 @@ The nonstationary dynamic-programming oracle remains an upper control in both
 strata. Model evaluations, simulator transitions, and guide-training
 transitions are reported in separate columns rather than converted into an
 arbitrary common unit.
+
+The existing `transition_budget` limits PPO guide training before MCMC. It is
+not a total-method cap. New result metadata labels this explicitly; matched
+total-budget dispatch is still required. Include the frozen guide and continued
+PPO under the same total cost as attribution controls.
+
+For direct ELBO, PPO-warm-start ELBO and the five baselines, new configurations
+can now set `strict_transition_budget: true`. This caps the entire method's
+simulator training, including the guide, and reports unused allowance. The
+baseline update implementations remain unchanged; complete-episode trainers
+receive a conservatively reserved stopping threshold. MCMC/SMC experiment
+branches currently reject strict mode. See `strict_budget_contract.md`.
 
 ## Current audit limitations
 

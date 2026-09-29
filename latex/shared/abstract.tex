@@ -1,22 +1,35 @@
 We study generalized Bayesian inference over complete deterministic policies
-while preserving the ordinary expected-return objective of a stochastic Markov
-decision process.  The target is a Gibbs measure whose log density is
-proportional to a policy's expected return.  It is therefore different from a
-trajectory target that averages exponentiated realized returns, which is
-risk-sensitive even when the intended control objective is not.  Our primary
-algorithm is replica-exchange Metropolis--Hastings in policy space.  A frozen
-PPO policy guides full-support single-state and whole-policy proposals, while
-exact Hastings corrections prevent the guide from changing the invariant
-distribution.  When
-the transition model is available, dynamic programming evaluates the exact
-target; with simulator-only access, an immutable bank of common random-number
-tapes defines a transparent sample-average approximation.  Direct variational
-and replicated sequential Monte Carlo estimators provide complementary
-ablations.  Evaluation samples one complete policy and commits to it for the
-episode, and compares against precisely specified REINFORCE, PPO-Clip, discrete
-SAC, categorical cross-entropy search, and Double Q-learning baselines under
-matched simulator access and compute accounting in a separate information
-stratum.  Exact finite-policy gates precede
-larger stochastic GridWorld experiments.  Confirmatory empirical results are
-not yet claimed in this draft; medium-scale mixing and cost gates remain in
-progress.
+using the expected return of a stochastic finite-horizon Markov decision
+process. The Gibbs target is defined before choosing an approximation:
+environment randomness is averaged before the value is exponentiated.
+This established policy-search formulation is distinct from weighting
+individual trajectories by exponentiated realized return.
+
+The current practical method learns a factorized distribution over complete
+policy tables. A separately costed PPO guide initializes the distribution;
+direct variational refinement then uses simulator returns, a leave-one-out
+baseline, and an exact policy-space entropy term. We justify its
+visited-state-masked score gradient and verify the actual implementation
+against exact differentiation on enumerable instances. One rollout per
+sampled policy is sufficient for gradient correctness, although allocation
+between policy draws and repeated rollouts affects finite-budget learning.
+The method samples fresh policies between updates and commits to one table
+during each evaluation episode. It has no particle-resampling stage.
+
+The empirical design separates gradient correctness, variational family
+error, and control performance. Strict interaction caps include guide
+training and refinement; native stochastic execution and committed-policy
+execution are both reported. Preliminary GridWorld studies favor one
+rollout per policy in a medium-map allocation test and find similar values
+to exploration-assisted PPO in one matched-budget comparison. A failed hard
+run exposes insufficient exploration; reallocating the same budget toward
+guide training improves its subsequent control without eliminating the gap
+between execution rules. These are development results, not confirmatory
+superiority or general posterior-fidelity claims.
+
+The thesis also documents exact-score and fixed-bank policy MCMC,
+replicated SMC, their validation contracts, and unsuccessful development
+configurations. The planned larger comparison includes REINFORCE, PPO-Clip,
+discrete SAC, categorical cross-entropy search, and Double Q-learning.
+Independent guide seeds, held-out maps, family-error analysis, and the
+complete cost--performance comparison remain necessary before final conclusions.

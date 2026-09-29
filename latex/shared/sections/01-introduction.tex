@@ -27,24 +27,34 @@ determines whether the resulting objective is risk-neutral, risk-sensitive, or
 maximum-entropy.  We therefore do not treat ``inference'' as sufficient to
 identify the control objective.
 
-The study makes five contributions:
+Expected-return Gibbs policy search and Metropolis--Hastings inference over
+policies have direct precedent in \citet{wingateEtAl2011}, who also discuss
+replica exchange. Neither the exponential target, its mode preservation, nor
+policy-space MCMC is claimed here as a new inference principle. The research
+question is how to approximate this target at a defensible computational cost,
+and what control behavior follows from committing to a sampled policy. The
+current practical candidate uses direct variational learning; corrected MCMC
+and fixed-bank SMC provide separately assessed alternatives. Preliminary
+development comparisons motivate, but do not replace, held-out validation.
+
+The study has five components:
 \begin{enumerate}
   \item It specifies an expected-return Gibbs measure over complete policies,
         including its reference measure, temperature, and execution semantics.
   \item It gives exact finite-policy oracles and variance-sensitive diagnostics
         that detect substitution of an exponentiated-trajectory objective.
-  \item It introduces guided replica-exchange policy MCMC whose PPO guide is
-        fully corrected by Metropolis--Hastings and therefore affects mixing,
-        not the invariant target.
-  \item It separates exact model evaluation from a fixed-tape simulator
-        approximation, and retains direct variational and replicated SMC
-        alternatives as controlled ablations.
+  \item It implements direct policy-space variational learning with an unbiased
+        masked score-function gradient, independent baseline, and exact
+        policy-table entropy term.
+  \item It separates variational family error, fixed-tape approximation, and
+        MCMC mixing, retaining corrected guided MCMC and replicated SMC as
+        diagnostic alternatives rather than conflating their guarantees.
   \item It defines a fail-fast comparison against five published algorithmic
-        families with common policy-commitment semantics and full cost
-        accounting.
+        families with both policy-commitment and native execution semantics,
+        strict total interaction caps, and separately labeled exploration aids.
 \end{enumerate}
 
-Agreement with exact enumeration establishes target correctness before any
-large-scale performance comparison is attempted.  The experimental protocol is
-specified before confirmatory results; this draft labels incomplete empirical
-claims as preliminary or to be determined.
+Exact small-instance checks validate target definitions, gradient expectations,
+and sampling kernels before scaling. They do not establish full posterior
+agreement for the variational family. The protocol is specified before
+confirmatory results; this draft labels development findings as preliminary.

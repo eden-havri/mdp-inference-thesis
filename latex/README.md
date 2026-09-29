@@ -1,15 +1,17 @@
 # Dual-output LaTeX manuscript
 
-This directory contains one shared scientific manuscript and two thin output
-wrappers:
+This directory contains two narratives for the same scientific study:
 
 - `thesis.tex` builds the bilingual A4 BGU thesis using the 2022 BGU template
   structure: English cover and approval pages, English front matter, Hebrew
   contents, Hebrew abstract, and Hebrew cover.
-- `paper.tex` builds a compact article-style submission draft.
-- `shared/` contains all scientific prose, equations, notation, and the
-  bibliography database. Scientific content should be edited here, not copied
-  between wrappers.
+- `paper.tex` builds a concise article from `paper/`, with the core question,
+  method, decisive evidence, and limitations. It is currently a research draft,
+  not a completed conference submission.
+- `shared/manuscript.tex` and `shared/sections/` hold the detailed thesis.
+- Metadata, notation, references, and scientific conclusions are shared.
+  The prose and level of detail are deliberately different. Verified numerical
+  results must agree across the two narratives.
 - `styles/` contains presentation-only settings for the two outputs.
 - `vendor/bgu-template/` contains the attributed BGU logo and bibliography
   style distributed with the source template.
@@ -31,8 +33,9 @@ the main file.  The thesis uses pdfLaTeX, matching the source template.
 
 The thesis wrapper is adapted from **BGU Thesis Template (New Version 2022)**
 by Ilan Git, downloaded from Overleaf under CC BY 4.0.  The source and license
-are recorded in `vendor/bgu-template/ATTRIBUTION.md`.  Scientific content
-remains in `shared/` and is not duplicated between outputs.
+are recorded in `vendor/bgu-template/ATTRIBUTION.md`. The article uses a neutral
+review layout until a venue and its official submission format are selected;
+its current margins do not claim compliance with a conference template.
 
 Before deposit, confirm the Hebrew spelling of the author and advisor, the
 working Hebrew title translation, faculty, department, degree wording, and
@@ -46,14 +49,17 @@ bibliography style against the current graduate-school instructions.
 
 ## Scientific narrative
 
-The shared manuscript defines `exp(beta * expected return)` before choosing an
-approximation. Its primary method is guided replica-exchange policy MCMC with
+Both manuscripts define `exp(beta * expected return)` before choosing an
+approximation and acknowledge prior Gibbs policy search. The candidate method
+is guided replica-exchange policy MCMC with
 exact Hastings correction. Exact dynamic-programming and fixed-tape
 sample-average targets are distinguished explicitly; direct ELBO and replicated
 SMC variants are retained as ablations. One sampled policy is preserved
 throughout each episode, and exact finite-MDP validation is required before
-scaling. Paired experiments use identical environments, seeds, evaluation
-budgets, and reporting.
+scaling. Structural blocks use exact transition information even with rollout
+scores. Matched total-budget enforcement and native-baseline reporting remain
+prerequisites for confirmatory comparisons. See `../docs/reassessment_2026-09-29.md`
+and `../docs/publication_plan.md` for the current decisions.
 
 ## Metadata and references
 

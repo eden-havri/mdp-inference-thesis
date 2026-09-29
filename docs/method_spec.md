@@ -1,5 +1,11 @@
 # Method Specification: Expected-Return Gibbs Policy Inference
 
+Current implementation and research decisions: see the dated note at the end
+and `research_alignment_2026-09-29.md`. The latter separates the common
+formulation from engine-specific validation and does not require universal
+performance superiority. It supersedes historical forward-looking
+instructions below where they differ from the tested implementation.
+
 Status: normative design note. No large-scale experiment is authorized until every
 required gate in this document passes.
 
@@ -1318,3 +1324,24 @@ independent semantic and optimization check, and replicated SMC is a complementa
 SAA candidate. The exact finite-policy posterior remains the ground truth. No
 method is promoted because it is computationally elaborate; it must demonstrably
 target the declared distribution under the stated semantics.
+# Current implementation note (29 September 2026)
+
+The detailed specification above retains historical development material.
+The current decisions are in `research_alignment_2026-09-29.md`, following
+`reassessment_2026-09-29.md`. The primary-engine label above is a historical
+implementation choice, not a requirement that this thesis must use MCMC.
+The target and generic policy-space MCMC have prior precedent; practical
+novelty and medium-scale sampling adequacy are not yet established.
+
+Current structural branches use a fixed modal-path/paired-fringe catalog and
+query exact transition probabilities even with fixed-tape scoring. Those runs
+are model-assisted. The guide-training allowance is not a total-method cap.
+Native stochastic-baseline execution and committed-policy execution must be
+reported separately. The DP oracle is a nonstationary upper control.
+
+Logical value evaluations are `M + local + global + path + block`, summed
+over all replicas and all block repetitions, rather than one per replica per
+active sweep. Actual computations plus exact cache hits equal that total.
+Local and structural MH acceptance is scaled by 0.95 independently per scored
+substep; this preserves its target while preventing synchronized parity traps.
+Structural-only configurations require full active-coordinate coverage.

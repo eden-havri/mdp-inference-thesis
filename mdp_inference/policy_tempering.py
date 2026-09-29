@@ -9,6 +9,14 @@ from .mdp import FiniteHorizonMDP, TapeBank
 from .policy_mcmc import autocorrelation_effective_sample_size
 
 
+# Apply independently at every local or structural MH substep, after scoring.
+# Scaling min(1, exp(log_MH)) preserves detailed balance and gives each block
+# and replica a self-loop. Whole-sweep laziness alone cannot prevent parity
+# synchronization between replicas or even-repeat freezing in two-action
+# map-toggle blocks. Full-support global independence proposals need no scale.
+WITHIN_REPLICA_MH_ACCEPTANCE_SCALE = 0.95
+
+
 @dataclass(frozen=True)
 class PolicyTemperingConfig:
     """Replica-exchange MCMC configuration for a policy Gibbs target."""
@@ -811,6 +819,23 @@ def run_replica_exchange_policy_mh(
     )
     num_blocks = 0 if frozen_block_catalog is None else len(frozen_block_catalog)
     block_repeats = _resolve_block_repeats(config.block_repeats, num_blocks)
+    if (
+        config.global_refresh_probability == 0.0
+        and config.path_refresh_probability + config.block_refresh_probability == 1.0
+    ):
+        # Swaps only move existing policies between temperatures.  Without a
+        # local or full-support global branch, every coordinate must therefore
+        # be mutable by an active structural branch to preserve irreducibility.
+        active_blocks = (
+            frozen_block_catalog
+            if config.block_refresh_probability > 0.0
+            else frozen_block_catalog[:1]
+        )
+        if not np.all(np.any(active_blocks, axis=0)):
+            raise ValueError(
+                "active structural proposals must cover all decision states "
+                "when local and global refresh probabilities are zero"
+            )
     base_policy = mdp.validate_policy(initial_policy).copy()
     base_policy[mdp.terminal] = 0
     # The atom is frozen before sampling.  In the main method ``initial_policy``
@@ -1029,7 +1054,12 @@ def run_replica_exchange_policy_mh(
             proposal[block_states],
             policies[replica, block_states],
         )
-        accepted = np.log(rng.random()) < min(0.0, float(log_acceptance))
+        # Clamp the ordinary MH log acceptance before adding the scale:
+        # min(1, scale * exp(log_MH)) would still allow probability-one moves.
+        accepted = np.log(rng.random()) < (
+            min(0.0, float(log_acceptance))
+            + math.log(WITHIN_REPLICA_MH_ACCEPTANCE_SCALE)
+        )
         if accepted:
             policies[replica] = proposal
             returns[replica] = proposed_return
@@ -1179,7 +1209,10 @@ def run_replica_exchange_policy_mh(
                     local_proposals[replica] += 1
                     if iteration >= config.burn_in:
                         post_burn_local_proposals[replica] += 1
-                    if np.log(rng.random()) < min(0.0, float(log_acceptance)):
+                    if np.log(rng.random()) < (
+                        min(0.0, float(log_acceptance))
+                        + math.log(WITHIN_REPLICA_MH_ACCEPTANCE_SCALE)
+                    ):
                         policies[replica] = proposal
                         returns[replica] = proposed_return
                         local_accepts[replica] += 1

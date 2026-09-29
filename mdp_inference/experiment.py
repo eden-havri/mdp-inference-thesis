@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 
 from .artifacts import load_grid_spec, software_environment, source_tree_sha256
+from .budget import complete_episode_stop_threshold
 from .baselines import (
     CEMConfig,
     DiscreteSACConfig,
@@ -44,6 +45,7 @@ from .policy_mcmc import (
 )
 from .policy_tempering import (
     PolicyTemperingConfig,
+    WITHIN_REPLICA_MH_ACCEPTANCE_SCALE,
     normalize_frozen_guide_probabilities,
     run_replica_exchange_policy_mh,
 )
@@ -71,6 +73,7 @@ class ExperimentConfig:
     output_root: str = "results"
     training_seed: int = 0
     transition_budget: int = 10_000
+    strict_transition_budget: bool = False
     beta: float = 1.0
     evaluation_policy_samples: int = 2_000
     direct_policy_samples: int = 32
@@ -211,6 +214,87 @@ def _sample_committed_policies(
     return policies, mean, std
 
 
+def _add_comparison_metadata(config: ExperimentConfig, result: dict[str, Any]) -> None:
+    """Describe information and estimands without changing measured values."""
+
+    has_guide_stage = config.method in {
+        "replicated_smc", "ppo_guided_smc", "ppo_policy_bank",
+        "ppo_policy_mh", "ppo_policy_tempering",
+    }
+    is_mcmc = config.method in {"ppo_policy_mh", "ppo_policy_tempering"}
+    uses_structure = config.method == "ppo_policy_tempering" and (
+        config.mcmc_path_refresh_probability > 0.0
+        or config.mcmc_block_refresh_probability > 0.0
+    )
+    exact_planning_scores = is_mcmc and config.mcmc_tapes == 0
+    is_control = config.method in {"random", "oracle"}
+    if config.method == "oracle" or exact_planning_scores:
+        regime = "model_based_planning"
+    elif uses_structure:
+        regime = "model_based_planning_with_simulator_scores"
+    elif has_guide_stage:
+        regime = "generative_simulator_planning"
+    elif config.method == "random":
+        regime = "no_training_or_planning"
+    else:
+        regime = "generative_simulator_training"
+    result["information_access"] = {
+        "method_regime": regime,
+        "training": "none" if is_control else "generative_simulator",
+        "planning_scores": (
+            "exact_transition_reward_model"
+            if exact_planning_scores or config.method == "oracle"
+            else "generative_simulator" if has_guide_stage else "none"
+        ),
+        "proposal_structure": (
+            "exact_transition_model" if uses_structure else "no_exact_model_structure"
+        ),
+        "uses_exact_model_for_training_or_planning": (
+            exact_planning_scores or uses_structure or config.method == "oracle"
+        ),
+        "offline_evaluation": "exact_transition_reward_model",
+    }
+    total_steps = int(result["simulator_steps"])
+    training_steps = int(result.get("training_simulator_steps", total_steps))
+    result["budget_accounting"] = {
+        "transition_budget_scope": (
+            "guide_training_only" if has_guide_stage
+            else "unused_control" if is_control else "training"
+        ),
+        "transition_budget_is_total_method_budget": config.strict_transition_budget and not is_control,
+        "strict_transition_budget": config.strict_transition_budget,
+        "unused_transition_allowance": config.transition_budget - total_steps if config.strict_transition_budget else None,
+        "counted_training_simulator_steps": training_steps,
+        "counted_planning_simulator_steps": total_steps - training_steps,
+        "simulator_steps_scope": "all_training_and_planning_simulator_transitions",
+        "simulator_steps_excludes": ["exact_model_work", "offline_evaluation"],
+        "exact_model_planning_value_evaluations": (
+            int(result["mcmc_value_evaluations"]) if exact_planning_scores else None
+        ),
+        "exact_model_structure_access_is_counted": False,
+    }
+    result["metric_estimands"] = {
+        "primary": {
+            "return_metric": "value",
+            "goal_probability_metric": "goal_reaching_probability",
+            "policy_execution": result["primary_value_semantics"],
+            "evaluation": "exact_environment_expectation",
+        },
+    }
+    if "marginal_action_value" in result:
+        result["metric_estimands"]["marginal_action_diagnostic"] = {
+            "return_metric": "marginal_action_value",
+            "goal_probability_metric": "marginal_action_goal_probability",
+            "policy_execution": "action_resampled_on_every_state_visit",
+            "role": (
+                "native_stochastic_baseline_execution"
+                if config.method in {"reinforce", "ppo", "sac"}
+                else "action_marginal_execution_diagnostic"
+            ),
+            "is_primary_comparison_estimand": False,
+        }
+
+
 def run_experiment(config: ExperimentConfig) -> Path:
     allowed_methods = {
         "random",
@@ -230,6 +314,11 @@ def run_experiment(config: ExperimentConfig) -> Path:
     }
     if config.method not in allowed_methods:
         raise ValueError(f"unknown method {config.method!r}")
+    strict_methods = {"direct_elbo", "ppo_warmstart_elbo", "reinforce", "ppo", "sac", "cem", "double_q", "random", "oracle"}
+    if config.strict_transition_budget and config.method not in strict_methods:
+        raise ValueError(f"Strict total budgeting is not implemented for {config.method}")
+    if config.transition_budget <= 0:
+        raise ValueError("transition_budget must be positive")
     if not 0.0 < config.proposal_uniform_mix < 1.0:
         raise ValueError("proposal_uniform_mix must lie in (0, 1)")
     if not 0.0 < config.warm_start_fraction < 1.0:
@@ -325,6 +414,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
     map_path = Path(config.map_path).resolve()
     spec, map_hash = load_grid_spec(map_path)
     mdp = gridworld_mdp(spec)
+    baseline_budget = config.transition_budget
+    if config.strict_transition_budget and config.method in {"reinforce", "ppo", "sac", "cem"}:
+        baseline_budget = complete_episode_stop_threshold(config.transition_budget, mdp.horizon)
     if config.method in {"reinforce", "ppo", "sac"} and not np.isclose(mdp.gamma, 1.0):
         raise NotImplementedError(
             "discounted REINFORCE/PPO/SAC semantics are not yet validated; use gamma=1"
@@ -332,6 +424,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
     goal_states = tuple(state_of(spec, cell) for cell in spec.goals)
     final_dir = Path(config.output_root).resolve() / config.run_id
     if (final_dir / "DONE").exists():
+        saved_config = ExperimentConfig(**json.loads((final_dir / "config.json").read_text(encoding="utf-8")))
+        if asdict(saved_config) != asdict(config):
+            raise ValueError("Completed run_id belongs to a different configuration; use a new run_id")
         return final_dir
     if final_dir.exists():
         raise FileExistsError(f"partial output already exists: {final_dir}")
@@ -384,7 +479,10 @@ def run_experiment(config: ExperimentConfig) -> Path:
             "random_committed_goal_probability_se": random_goal_std
             / np.sqrt(config.evaluation_policy_samples),
             "transition_budget": config.transition_budget,
-            "transition_budget_semantics": "minimum_counted_training_transitions",
+            "transition_budget_semantics": (
+                "hard_cap_all_training_simulator_transitions" if config.strict_transition_budget
+                else "minimum_counted_training_transitions"
+            ),
             "evaluation_policy_samples": config.evaluation_policy_samples,
             "transition_model_kind": mdp.transition_model_kind,
             "transition_storage_bytes": mdp.transition_storage_bytes,
@@ -425,6 +523,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     learning_rate=config.learning_rate,
                     seed=config.training_seed,
                     transition_budget=config.transition_budget,
+                    strict_transition_budget=config.strict_transition_budget,
                 ),
             )
             proposal = distribution.probabilities().detach().cpu().numpy()
@@ -444,7 +543,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 config.evaluation_policy_samples
             )
             result["map_policy_value"] = _map_policy_value(mdp, full_probabilities)
-            result["training_simulator_steps"] = int(history[-1]["simulator_steps"])
+            result["training_simulator_steps"] = int(history[-1]["simulator_steps"]) if history else 0
             policy_probabilities_artifact = full_probabilities
             if config.method == "direct_elbo":
                 result["value"] = committed_mean
@@ -571,10 +670,14 @@ def run_experiment(config: ExperimentConfig) -> Path:
         elif config.method == "ppo_warmstart_elbo":
             warm_start_budget = max(1, int(config.transition_budget * config.warm_start_fraction))
             refinement_budget = max(1, config.transition_budget - warm_start_budget)
+            warm_start_stop = (
+                complete_episode_stop_threshold(warm_start_budget, mdp.horizon)
+                if config.strict_transition_budget else warm_start_budget
+            )
             warm_start = train_ppo(
                 mdp,
                 PPOConfig(
-                    transition_budget=warm_start_budget,
+                    transition_budget=warm_start_stop,
                     batch_transitions=config.ppo_batch_transitions,
                     update_epochs=config.ppo_update_epochs,
                     minibatch_size=config.ppo_minibatch_size,
@@ -587,6 +690,11 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 ),
             )
             warm_start_probabilities = warm_start.action_probabilities
+            if config.strict_transition_budget:
+                if warm_start.transitions > warm_start_budget:
+                    raise AssertionError("PPO guide exceeded its reserved transition cap")
+                # Debit actual guide use, including every completed episode.
+                refinement_budget = config.transition_budget - warm_start.transitions
             warm_start_decisions = warm_start_probabilities[
                 np.asarray(mdp.decision_states, dtype=np.int64)
             ]
@@ -607,6 +715,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     learning_rate=config.learning_rate,
                     seed=config.training_seed + 1_000_003,
                     transition_budget=refinement_budget,
+                    strict_transition_budget=config.strict_transition_budget,
                 ),
                 initial_logits=initial_logits,
             )
@@ -643,9 +752,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
             sampled_policies = distribution.full_policies(sampled_decisions)
             primary_committed_policies = sampled_policies
             committed_mean, committed_std = _committed_policy_value(mdp, sampled_policies)
-            total_training_steps = warm_start.transitions + int(
-                refinement_history[-1]["simulator_steps"]
-            )
+            refinement_steps = int(refinement_history[-1]["simulator_steps"]) if refinement_history else 0
+            total_training_steps = warm_start.transitions + refinement_steps
             result.update(
                 {
                     "value": committed_mean,
@@ -669,9 +777,10 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         mdp, warm_start_probabilities
                     ),
                     "warm_start_simulator_steps": warm_start.transitions,
-                    "refinement_simulator_steps": int(
-                        refinement_history[-1]["simulator_steps"]
-                    ),
+                    "refinement_simulator_steps": refinement_steps,
+                    "refinement_transition_allowance": refinement_budget,
+                    "warm_start_transition_allowance": warm_start_budget,
+                    "warm_start_stop_threshold": warm_start_stop,
                     "simulator_steps": total_training_steps,
                 }
             )
@@ -1059,6 +1168,12 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     "mcmc_block_refresh_probability": (
                         config.mcmc_block_refresh_probability
                     ),
+                    "mcmc_within_replica_mh_acceptance_scale": (
+                        WITHIN_REPLICA_MH_ACCEPTANCE_SCALE
+                    ),
+                    "mcmc_within_replica_mh_laziness_scope": (
+                        "local_and_structural_scored_substeps"
+                    ),
                     "mcmc_block_repeats": realized_block_repeats,
                     "mcmc_global_mixture_weights": {
                         "map": config.mcmc_global_map_weight,
@@ -1219,7 +1334,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 trained = train_reinforce(
                     mdp,
                     ReinforceConfig(
-                        transition_budget=config.transition_budget,
+                        transition_budget=baseline_budget,
                         episodes_per_update=config.reinforce_episodes_per_update,
                         learning_rate=config.learning_rate,
                         value_learning_rate=config.reinforce_value_learning_rate,
@@ -1230,7 +1345,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 trained = train_ppo(
                     mdp,
                     PPOConfig(
-                        transition_budget=config.transition_budget,
+                        transition_budget=baseline_budget,
                         batch_transitions=config.ppo_batch_transitions,
                         update_epochs=config.ppo_update_epochs,
                         minibatch_size=config.ppo_minibatch_size,
@@ -1246,7 +1361,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 trained = train_discrete_sac(
                     mdp,
                     DiscreteSACConfig(
-                        transition_budget=config.transition_budget,
+                        transition_budget=baseline_budget,
                         replay_capacity=config.sac_replay_capacity,
                         learning_starts=config.sac_learning_starts,
                         batch_size=config.sac_batch_size,
@@ -1261,7 +1376,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 trained = train_cem(
                     mdp,
                     CEMConfig(
-                        transition_budget=config.transition_budget,
+                        transition_budget=baseline_budget,
                         population_size=config.cem_population_size,
                         elite_fraction=config.cem_elite_fraction,
                         rollouts_per_policy=config.cem_rollouts_per_policy,
@@ -1274,7 +1389,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 trained = train_double_q(
                     mdp,
                     DoubleQConfig(
-                        transition_budget=config.transition_budget,
+                        transition_budget=baseline_budget,
                         learning_rate=config.learning_rate,
                         initial_epsilon=config.double_q_initial_epsilon,
                         final_epsilon=config.double_q_final_epsilon,
@@ -1303,8 +1418,11 @@ def run_experiment(config: ExperimentConfig) -> Path:
             )
             result["map_policy_value"] = _map_policy_value(mdp, trained.action_probabilities)
             result["simulator_steps"] = trained.transitions
+            result["training_stop_threshold"] = baseline_budget
             policy_probabilities_artifact = trained.action_probabilities
 
+        if config.strict_transition_budget and result["simulator_steps"] > config.transition_budget:
+            raise AssertionError("Experiment exceeded its total simulator-transition cap")
         if not np.isfinite(float(result["value"])):
             raise FloatingPointError("experiment produced a non-finite value")
         return_oracle = finite_horizon_optimal_control(mdp)
@@ -1353,6 +1471,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
             if config.method == "oracle"
             else "policy_sample_then_commit"
         )
+        _add_comparison_metadata(config, result)
         result["elapsed_seconds"] = time.time() - started
         if policy_probabilities_artifact is not None:
             policy_path = work_dir / "policy_probabilities.npy"

@@ -1,6 +1,8 @@
 \DocSection{Expected-Return Policy Inference}
 \label{sec:corrected-method}
 
+\input{shared/sections/05a-variational}
+
 \DocSubsection{Exact and sample-average policy scores}
 
 The sampler uses a score \(\widetilde J(\policy)\).  With an explicit finite
@@ -136,6 +138,47 @@ The branch settings, local and global proposal/acceptance counts, a separate
 count of accepted policy-changing global moves, \(\delta\), and the realized
 lazy-sweep count are stored with each run.
 
+\DocSubsection{Fixed structural blocks and connectivity}
+
+The implementation also supports two separately selected branches: a
+path-only update and an ordered sweep over a fixed catalog of blocks.
+The catalog follows the modal guide from the start to a terminal state and
+then partitions its one-hop recovery neighbors into pairs (with a possible
+final singleton). This construction queries exact successor probabilities
+and is therefore model-assisted even when the scores use fixed tapes.
+A cycling modal path is rejected, rather than silently selecting a different
+construction from production samples.
+
+The path block uses a MAP/guide/uniform independence mixture restricted to its
+coordinates. Its Hastings ratio sums all overlapping mixture components.
+For a small recovery block, let $m$ denote the guide-MAP assignment and let
+$R$ be the guide/uniform mixture conditioned on not choosing $m$.
+The proposal moves from any $x\ne m$ to $m$ deterministically, and from
+$m$ to $y\sim R$. Its reverse-to-forward proposal ratio is $R(x)$ in
+the first case and $1/R(y)$ in the second. Applying the corresponding
+Metropolis--Hastings correction preserves the conditional policy target.
+Composing the fixed block kernels preserves invariance, although the
+complete ordered sweep need not be reversible.
+
+Invariance alone does not establish connectivity. If local and whole-policy
+branches are disabled, the active catalog must cover every decision
+coordinate. Even full coverage can leave a deterministic ordered sweep
+trapped in a parity class on a flat two-action problem. To prevent this,
+each scored local or structural substep uses
+\[
+  \alpha_{\mathrm{substep}}(x,y)
+  =0.95\min\{1,\exp[L(x,y)]\}.
+\]
+This is a mixture of the ordinary MH kernel with an independent identity
+step. It preserves detailed balance and permits individual replicas and
+blocks to remain fixed while others move. Whole-sweep laziness alone cannot
+provide this property. Rejected substeps still count their proposal and
+score evaluation, so the acceptance accounting remains explicit.
+
+The structural kernels have passed finite-policy implementation checks, but
+their medium-scale development runs have not established useful mixing.
+They are recorded experimental variants, not a validated scalability result.
+
 \DocSubsection{Replica exchange across inverse temperatures}
 
 Single-site moves can mix slowly when good complete policies occupy separated
@@ -206,9 +249,16 @@ Hamming movement, and switching at nondegenerate coordinates.  Only the latter
 supports a mixing claim.  A high-return cold replica cannot compensate for a
 failure at either stage.
 
-For \(I\) total iterations, \(N_{\mathrm{lazy}}\) lazy sweeps, and \(M\)
-temperatures, the sampler uses
-\(M+M(I-N_{\mathrm{lazy}})\) policy-value evaluations.  Swaps reuse cached values.
+For $M$ replicas and scored proposal counts $N_{\mathrm{local}}$,
+$N_{\mathrm{global}}$, $N_{\mathrm{path}}$, and $N_{\mathrm{block}}$, summed
+over every replica and block repetition, logical policy-value evaluations are
+\[
+ M+N_{\mathrm{local}}+N_{\mathrm{global}}+
+ N_{\mathrm{path}}+N_{\mathrm{block}}.
+\]
+An ordered structural sweep can perform multiple evaluations per replica.
+Exact repeated-policy cache hits and actual score computations are logged
+separately and sum to this logical total. Swaps reuse current scores.
 
 PPO training is part of the proposed method's cost.  Matched-budget comparisons
 therefore include every interaction and optimizer update used to train the
@@ -218,28 +268,9 @@ zero simulator transitions.
 
 \DocSubsection{Complementary estimators and ablations}
 
-Two additional estimators test which part of the construction matters.  First,
-for a tractable distribution \(q_\theta\) over complete policies, the direct
-variational objective is
-\begin{equation}
-  \mathcal L(\theta)
-  = \beta\E_{\policy\sim q_\theta}
-      [\ExpectedReturn_H(\policy)]
-    - \KL(q_\theta\|\mu).
-  \label{eq:correct-elbo}
-\end{equation}
-Sampling \(\policy\sim q_\theta\) and then a rollout conditional on that
-same policy gives an unbiased estimator of the return term because it is
-linear in \(J\).  A score-function contribution is
-\begin{equation}
-  \left(\beta\Return_H+\log\mu(\policy)
-        -\log q_\theta(\policy)-c\right)
-  \nabla_\theta\log q_\theta(\policy),
-  \label{eq:score-gradient}
-\end{equation}
-where \(c\) is an action-independent control variate.
-
-Second, replicated policy SMC instantiates each state action once in a lazy
+Direct variational inference is defined at the start of this chapter in
+Equations~\eqref{eq:correct-elbo}--\eqref{eq:score-gradient}. As a separate
+alternative, replicated policy SMC instantiates each state action once in a lazy
 policy memo and advances \(K\) simulator replicas under that same policy.
 For newly exposed states \(U_t\), its incremental log weight is
 \begin{equation}

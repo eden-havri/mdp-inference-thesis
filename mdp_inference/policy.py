@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .budget import reserved_policy_batch_size
 from .exact import _enumerated_policies
 from .mdp import FiniteHorizonMDP
 
@@ -170,6 +171,7 @@ class DirectELBOTrainConfig:
     learning_rate: float = 3e-2
     seed: int = 0
     transition_budget: int | None = None
+    strict_transition_budget: bool = False
 
 
 def train_direct_elbo(
@@ -179,6 +181,12 @@ def train_direct_elbo(
 ) -> tuple[TabularPolicyDistribution, list[dict[str, float]]]:
     if config.iterations <= 0:
         raise ValueError("iterations must be positive")
+    if config.num_policy_samples <= 0 or config.rollouts_per_policy <= 0:
+        raise ValueError("Policy and rollout counts must be positive")
+    if config.transition_budget is not None and config.transition_budget < 0:
+        raise ValueError("transition_budget must be nonnegative")
+    if config.strict_transition_budget and config.transition_budget is None:
+        raise ValueError("A strict transition budget requires a numeric cap")
     distribution = TabularPolicyDistribution(mdp, initial_logits=initial_logits)
     optimizer = torch.optim.Adam(distribution.parameters(), lr=config.learning_rate)
     rng = np.random.default_rng(config.seed)
@@ -187,10 +195,18 @@ def train_direct_elbo(
     history: list[dict[str, float]] = []
     total_simulator_steps = 0
     for iteration in range(config.iterations):
+        count = config.num_policy_samples
+        if config.strict_transition_budget:
+            count = reserved_policy_batch_size(
+                config.transition_budget - total_simulator_steps,
+                mdp.horizon, config.rollouts_per_policy, count,
+            )
+            if count == 0:
+                break
         sample = direct_elbo_sample(
             distribution,
             mdp,
-            config.num_policy_samples,
+            count,
             config.rollouts_per_policy,
             config.beta,
             rng,
@@ -198,8 +214,12 @@ def train_direct_elbo(
         )
         optimizer.zero_grad()
         (-sample.surrogate).backward()
+        if not torch.isfinite(sample.surrogate) or not torch.isfinite(distribution.logits.grad).all():
+            raise FloatingPointError("Nonfinite direct ELBO update")
         optimizer.step()
         total_simulator_steps += sample.simulator_steps
+        if config.strict_transition_budget and total_simulator_steps > config.transition_budget:
+            raise AssertionError("Direct ELBO exceeded its reserved transition cap")
         history.append(
             {
                 "iteration": float(iteration),
@@ -207,6 +227,7 @@ def train_direct_elbo(
                 "mean_return": sample.mean_return,
                 "learning_signal_std": sample.learning_signal_std,
                 "simulator_steps": float(total_simulator_steps),
+                "policy_samples": float(count),
             }
         )
         if config.transition_budget is not None and total_simulator_steps >= config.transition_budget:

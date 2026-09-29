@@ -1,27 +1,33 @@
 \DocSection{Conclusion}
 \label{sec:conclusion}
 
-Expected-return policy inference is well defined only after the policy space,
-reference measure, inverse temperature, and execution semantics are explicit.
-The key mathematical choice is to exponentiate a policy's expected return, not
-to average exponentiated realized returns.  Guided replica-exchange
-Metropolis--Hastings provides an exact sampler when policy values are computed
-by dynamic programming and an exact sampler for a declared fixed-tape
-sample-average target under simulator access.  Full-support guidance can
-improve proposals without changing either target because both the local and
-whole-policy proposal branches are Hastings-corrected.
+Expected-return policy inference is meaningful only after the policy space,
+reference measure, inverse temperature, and execution rule are explicit.
+Averaging environment randomness before exponentiation distinguishes its
+target from an exponential-trajectory objective. This established Gibbs
+construction motivates an implementation whose approximations can be
+tested independently of its control performance.
 
-Bounded returns also yield a nonnegative unbiased Poisson weight for an exact
-simulator-only pseudo-marginal extension.  Its explicit relative-variance
-formula shows why mathematical exactness alone is insufficient: at large
-inverse temperature it may require prohibitive rollout counts.  It is therefore
-a gated extension, not a substitute for reporting the finite-tape approximation
-honestly.
+The practical candidate uses simulator-based variational learning over
+complete policy tables, initialized by a separately costed PPO guide.
+Its masked score-function estimator is unbiased under the stated sampling
+assumptions, and exact small-instance tests exercise the actual implementation.
+It does not follow that a finite run globally optimizes the objective or
+represents the full target. Corrected MCMC and fixed-bank SMC remain
+documented alternatives with separate invariance, approximation and mixing
+requirements.
 
-The empirical claim remains deliberately narrower than the mathematical one.
-Exact tiny-domain agreement is established before scaling, and medium pilots
-must demonstrate mixing and acceptable cost before any confirmatory comparison.
-The final study will compare committed-policy control performance, target
-fidelity, and total compute against five precisely specified baselines.  Until
-those gates pass, the contribution is a testable formulation and algorithmic
-protocol rather than a claim of empirical superiority.
+Development results identify useful questions rather than settle the final
+comparison. One rollout per policy permits more effective refinement than
+four in the tested allocation. A medium-map matched-budget check gives
+similar values to assisted PPO, while a hard-map failure and conditional
+budget reallocation expose the importance of exploration before refinement.
+The sharp difference between commitment and action resampling also prevents
+equating policy consistency with improved control.
+
+Strict total simulator caps and explicit execution semantics now support
+a reproducible confirmatory study. The remaining evidence must characterize
+family error, independent-guide variability, held-out performance and full
+cost against the five declared baseline families. Competitive or mixed
+results can support a useful policy-inference contribution; neither
+universal superiority nor calibrated posterior uncertainty is claimed.

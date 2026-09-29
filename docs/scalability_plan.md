@@ -1,5 +1,12 @@
 # GridWorld scalability plan
 
+Status note, 29 September 2026: this is the historical dense-to-branched
+refactor plan and its original timing evidence, not a description of the
+current implementation. GridWorld now uses `BranchedFiniteHorizonMDP`, and
+the parity tests are implemented. Do not repeat this refactor or use the old
+dense timings as current runtime predictions. New VI canaries and remaining
+evaluation costs are recorded in `docs/strict_budget_contract.md`.
+
 ## Executive decision
 
 The current 16x16 medium grid is feasible but already wastes minutes per reported run, and the 32x32 hard grid is not economical with the default evaluator. The immediate problem is not the tabular policy: it is the dense `[S, A, S]` transition and reward representation combined with repeated exact evaluation of 2,000 sampled complete policies.

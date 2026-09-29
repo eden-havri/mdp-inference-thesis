@@ -106,9 +106,13 @@ result into the declared stationary policy class using state--time visitation.
 
 Comparisons are stratified by information access.  In the known-model stratum,
 exact-value tempering is tested for target fidelity and mixing against exact
-enumeration or known-model controls.  In the simulator-only stratum, fixed-tape
-sample-average tempering and the five learned competitors receive the same
-generative simulator and matched training-transition allowance.  Exact-model
+enumeration or known-model controls. Fixed-tape scoring alone does not imply
+simulator-only access: the current path/recovery block builder reads exact
+successor probabilities. Such runs remain model-assisted even when scores
+come from rollouts. In a simulator-only stratum, that builder must be disabled
+or replaced by separately counted simulator-based construction. Eligible
+fixed-tape variants and the five learned competitors then receive the same
+generative-simulator access. Exact-model
 tempering may be displayed beside simulator-only learners as a descriptive
 reference, but such a cross-stratum table cannot support a sample-efficiency
 superiority claim.  Model value evaluations, simulator transitions, and guide
@@ -116,7 +120,7 @@ training transitions are therefore reported in separate cost columns.
 
 \DocSubsection{Common evaluation semantics}
 
-For every non-oracle method, the primary evaluator samples a complete
+For the committed-policy study, the current evaluator samples a complete
 deterministic policy from the reported distribution and commits to it for the
 entire episode.  For an explicit particle or MCMC sample, that complete policy
 is used directly.  For statewise categorical outputs, one action is sampled
@@ -125,10 +129,14 @@ expected return and exact goal-reaching probability over these committed
 policies.  Their sample standard deviation and standard error describe
 variation over policy draws.
 
-Per-visit stochastic execution, statewise marginal probabilities, and the
-statewise maximum-probability policy are reported separately.  They cannot
-replace the committed-policy result because they destroy or collapse
-policy-level dependence.  Secondary metrics include lower-tail return,
+This rule is an intervention on stochastic baseline outputs, not their native
+deployment semantics. Native per-visit stochastic value is therefore a
+co-primary result for REINFORCE, PPO, and SAC in practical control comparisons;
+their committed-policy values answer a narrower policy-class question.
+A sampler's statewise marginals cannot replace its committed-policy result
+because they remove policy-level dependence. The statewise
+maximum-probability policy is also reported separately. Secondary metrics
+include lower-tail return,
 distributional target error where enumeration is possible, and mode recovery.
 
 \DocSubsection{Fair budgets and tuning}
@@ -154,6 +162,13 @@ evaluations, optimizer updates, wall time, CPU or accelerator time, and peak
 memory are reported separately.  A generally applicable exploration aid is
 offered to compatible methods or labeled as a separate assisted ablation.
 Competitor bugs are fixed; no baseline is weakened to improve a comparison.
+
+The current \texttt{transition\_budget} field is a guide-training allowance
+for tempering; the subsequent sampler adds cost. Counting that cost does not
+enforce a matched total budget. Confirmatory comparisons require a declared
+total-budget allocation or common cost checkpoints before dispatch. Continued
+PPO training under the same total allowance is an essential control for
+attributing any advantage to inference.
 
 \DocSubsection{Cost-effective execution order}
 
@@ -191,18 +206,23 @@ the cold replica remained near return \(1.1\); the final edge consequently
 accepted no swap.  High acceptance inside the bad plateau therefore did not
 indicate useful mixing.
 
-The next predeclared checkpoint tests the exact whole-policy refresh in
-Equation~\eqref{eq:global-policy-mh}, keeping the same ladder.  One
-overdispersed 1,000-iteration run must accept a policy-changing post-burn
-global proposal in the upper ladder quarter, accept a post-burn swap on the final edge, and send
-at least two walkers to the cold replica while sampling at least two distinct
-cold-replica policies.  Only then are one warm and one
-overdispersed 2,500-iteration chain run; both must traverse the ladder and
-every post-burn edge must accept at least \(0.20\).  These are tuning
-diagnostics, not evidence that the method outperforms a competitor.  They do
-not relax the later \(\widehat R\), ESS, round-trip, coordinate-agreement, and
-within-chain movement gate.  Full-scale comparison arrays remain paused until
-that full gate passes.
+Subsequent whole-policy and structural-block rescue attempts did not establish
+adequate mixing. An isolated path-proposal screen used four independent
+4,500-step chains at \(\beta=3.42\), discarding 1,200 steps and retaining
+every tenth subsequent state. Low-initialized chains remained near return
+\(-16\); high-initialized chain medians were approximately \(-1.56\) and
+\(-1.41\). Path banks fitted on one chain from each region failed to generate
+useful bidirectional crossings on the other chains. These measurements do not
+estimate the relative posterior mass of the regions.
+
+A bounded guide-field replica-exchange prototype is now being assessed.
+Its intermediate distributions can differ from ordinary temperature scaling,
+but its endpoint must remain the declared target. An initial rectangular path
+was strongly initialization-dependent and is not a validated replacement.
+Each revised path requires exact small-state checks and separately frozen
+development diagnostics before longer runs. Historical failed gates remain
+failed. Full-scale arrays require both sampling adequacy and a resolved
+information-access, evaluation, and total-cost contract.
 
 \begin{table}[t]
   \centering
