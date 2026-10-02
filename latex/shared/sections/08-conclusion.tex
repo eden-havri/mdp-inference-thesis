@@ -19,15 +19,18 @@ requirements.
 
 Development results identify useful questions rather than settle the final
 comparison. One rollout per policy permits more effective refinement than
-four in the tested allocation. A medium-map matched-budget check gives
-similar values to assisted PPO, while a hard-map failure and conditional
+four in the tested allocation. The independent-guide cluster calibration,
+however, includes a medium-map collapse, and assisted PPO has higher return
+in seven of eight paired comparisons. Hard-map failures and conditional
 budget reallocation expose the importance of exploration before refinement.
+A bounded medium-map reallocation recovers the selected failure and avoids
+collapse in two fresh seeds, while their native returns still favor PPO.
 The sharp difference between commitment and action resampling also prevents
 equating policy consistency with improved control.
 
 Strict total simulator caps and explicit execution semantics now support
 a reproducible confirmatory study. The remaining evidence must characterize
-family error, independent-guide variability, held-out performance and full
-cost against the five declared baseline families. Competitive or mixed
+initialization robustness, larger-instance family error, held-out performance
+and full cost against the five declared baseline families. Competitive or mixed
 results can support a useful policy-inference contribution; neither
 universal superiority nor calibrated posterior uncertainty is claimed.

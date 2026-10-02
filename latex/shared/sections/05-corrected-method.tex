@@ -266,7 +266,7 @@ guide plus all downstream policy evaluations.  Exact dynamic-programming
 evaluations are logged separately because they consume model computations but
 zero simulator transitions.
 
-\DocSubsection{Complementary estimators and ablations}
+\DocSubsection{Complementary estimators}
 
 Direct variational inference is defined at the start of this chapter in
 Equations~\eqref{eq:correct-elbo}--\eqref{eq:score-gradient}. As a separate
@@ -290,6 +290,5 @@ exponentiated noisy return an unbiased estimator of
 Equation~\eqref{eq:policy-target}.  Here replicated SMC is evaluated against
 the explicitly stated fixed-tape target and against exact enumeration.
 
-The isolation matrix contains uniform-guide MCMC, corrected PPO-guided MCMC,
-PPO alone, direct ELBO, uniform-proposal replicated SMC, and corrected guided
-SMC.  No condition may silently reuse extra simulator interactions.
+Diagnostic controls include unguided and PPO-guided MCMC/SMC and PPO alone.
+All simulator interactions are counted.

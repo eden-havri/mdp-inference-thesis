@@ -114,8 +114,97 @@ calculation gives
     \right)-1.
   \label{eq:poisson-policy-weight-rv}
 \end{equation}
-Keeping this relative variance bounded can therefore require a rollout count
-that grows quadratically with \(\beta\) and with the distance from the return
-lower bound.  This explains why the exact construction is retained as a
-diagnostic and future sampler rather than silently replacing the practical
-fixed-tape approximation.
+Bounded relative variance requires rollout cost scaling with
+\(\beta^2\E[(G_\policy-a)^2]\), potentially prohibitive.
+
+\section{Exact one-decision diagnostic}
+\label{app:noise-objective}
+
+Consider one state, one decision, and two policies. The safe action returns
+$c$ surely; the variable action returns $+1$ or $-1$ with equal probability.
+There are no state revisits, exploration difficulties, resampling ancestry,
+or policy-representation differences. Set $\beta=1$ and use a uniform prior.
+The expected-return target and exponential-trajectory target respectively give
+\begin{align}
+ P_{\rm mean}(\text{variable})
+   &=\frac{1}{e^c+1}, \\
+ P_{\rm trajectory}(\text{variable})
+   &=\frac{\cosh(1)}{e^c+\cosh(1)}.
+ \label{eq:noise-targets}
+\end{align}
+When $c=0$, both policies have mean zero, so the first probability is $1/2$;
+the second is approximately $0.606776$. When $c=0.2$, the safe policy has the
+higher mean, yet the trajectory target still assigns the variable policy
+approximately $0.558180$ mass. The expected-return target instead assigns
+the safe policy approximately $0.549834$ mass. Preference for variability is
+therefore a substantive objective choice, not an arithmetic error.
+
+For categorical proposal $q_\theta$ with logits $\theta=(\theta_0,\theta_1)$,
+the direct objective is
+\[
+ \mathcal L(\theta)=q_\theta(0)c+H(q_\theta)-\log2.
+\]
+At uniform initialization its gradient is $(c/4,-c/4)$. A single independent
+return per policy supplies an unbiased score-function estimate of this
+gradient, although individual updates remain noisy.
+
+\begin{samepage}
+To contrast an evidence objective, draw $N$ independent actions and returns,
+and form
+\[
+ W_i=\frac{e^{G_i}}{2q_\theta(A_i)},\qquad
+ \ell_N=\log\!\left(\frac1N\sum_iW_i\right),\qquad
+ F_N(\theta)=\E[\ell_N].
+\]
+\end{samepage}
+Writing $\bar W_i=W_i/\sum_jW_j$ and
+$s_i=\nabla_\theta\log q_\theta(A_i)$, differentiation gives
+\begin{equation}
+ \nabla_\theta F_N
+ =\E\!\left[-\sum_i\bar W_i s_i+\ell_N\sum_i s_i\right].
+ \label{eq:noise-evidence-gradient}
+\end{equation}
+The first term differentiates the importance weights; the second accounts
+for sampling actions from the parameterized proposal. This formula is not
+the direct expected-return gradient. It is also not asserted to equal the
+gradient of a variational KL to the trajectory target at every finite $N$.
+
+Each independent draw has three possible outcomes, with probabilities
+$q_\theta(0)$, $q_\theta(1)/2$, and $q_\theta(1)/2$. Enumerating all $3^N$
+combinations therefore computes Equation~\eqref{eq:noise-evidence-gradient}
+without Monte Carlo error. At uniform logits, the variable-action component is:
+\begin{center}
+\begin{tabular}{rrrr}
+\toprule
+$c$ & $N$ & Evidence gradient & Direct ELBO gradient \\
+\midrule
+0   & 1 & 0.000000  & 0.000000 \\
+0   & 2 & 0.054223  & 0.000000 \\
+0   & 4 & 0.045058  & 0.000000 \\
+0.2 & 1 & -0.050000 & -0.050000 \\
+0.2 & 2 & 0.023860  & -0.050000 \\
+0.2 & 4 & 0.028336  & -0.050000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{samepage}
+A positive component initially increases preference for the variable action.
+For $N=1$, taking the expectation of $G-\log2-\log q_\theta(A)$ recovers
+the direct ELBO on this instance. That special identity does not equate the
+objectives for larger $N$, or justify multi-state entropy approximations.
+\end{samepage}
+
+The executable check compares the one-step differentiable implementation with
+this enumeration for $N=1,2,4$, both values of $c$, and uniform or nonuniform
+logits: twelve cases and 96 saved numeric arrays. Independent inspection
+verifies the outcomes, masses, gradients, source identity and compute record.
+Native float32 discrepancies remain below the predeclared $3\times10^{-6}$
+absolute tolerance. Cross-platform re-summation of derived float64 quantities
+is checked separately at a 64-machine-epsilon bound; the native tolerance is
+not enlarged. The largest averaged native-gradient discrepancy is
+$3.70\times10^{-8}$.
+
+This check isolates the one-step objective distinction. It does not prove
+that either update learns a maze better, explain a full-system performance
+gap, or establish the scalability of either inference engine. Those questions
+require separately controlled, replicated experiments.

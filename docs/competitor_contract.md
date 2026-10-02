@@ -1,5 +1,41 @@
 # Competitor and fairness contract
 
+## 1 October extension
+
+The comparison includes the frozen unchanged public policy-VSMC implementation
+associated with V3; it is integrated and its basic-trainer development runs
+are independently audited. Our replicated SMC is not a substitute for it. Preserve its native neural
+representation and stochastic execution. Label a bug-fixed arm separately.
+Its code defaults differ from reported paper settings, and its environment
+adapter needs validated walls/action mappings and explicit budget accounting.
+See `next_compute_stage_2026-10-01.md` for the authoritative staged plan.
+
+Update: the environment/bounded-training adapter passes original tests and exact
+original/wrapper parity on BGU; see `reference_validation_2026-10-01.md`.
+This is a correctness preflight, not an all-method performance comparison.
+
+Latest status:25/27 first-seed development entries audited; medium/hard SAC are
+not complete, so those complete-tier rankings remain pending. The original
+basic trainer and documented logged trainer differ in initialization,schedule
+and checkpoint selection. Basic absolute-logit/fixed-rate/final-iterate runs
+must be named as such, not presented as the full V3 method. A separate unchanged
+own-domain logged run and exact bounded-logged-wrapper parity independently pass;
+see `reference_training_path_audit_2026-10-01.md`. An isolated memory fix has
+correctness witnesses but no full-budget performance result yet. Neither poor
+basic-trainer scores nor a large full-system gap prove the repair improves reward.
+
+Full-system comparisons do not isolate an objective when representations,
+initializers, target scales or exploration assistance differ. The planned
+matched-family and guide-attribution ablations address those confounders.
+Historical baseline variants and hashes remain unchanged by this plan.
+
+Implementation update: SAC now offers an explicitly recorded fused-Adam backend,
+defaulting to the original backend. Actual-trainer gradient/replay/target/moment
+parity and counterbalanced BGU timing pass; equations, float64 precision and
+update ratio are unchanged. This is an execution optimization, not a changed
+SAC algorithm or a contribution claimed for the proposed method. Both pre-option
+and updated source hashes are retained in `reference_validation_2026-10-01.md`.
+
 ## Competitors
 
 | Reported name | Implemented variant | Role |

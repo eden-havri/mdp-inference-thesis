@@ -64,7 +64,16 @@ The entropy term then improved the estimated ELBO without improving control.
 Full-budget assisted PPO found success only after that initial allowance.
 Reallocating the same total budget toward guide learning helped in a
 subsequent conditional development test. Repetition across independent
-guides is required before treating this allocation as a robust choice.
+guides is required before treating this allocation as a robust choice. The
+subsequent BGU calibration demonstrates why: one of three medium-map seeds
+also collapses after the 200k handoff. Successful trajectories occurred during
+its guide training, but the resulting distribution was still inadequate for
+committed-policy refinement. The other seeds do not justify discarding this
+failure or claiming that initialization is solved. Increasing the medium guide
+to 600k transitions within the same total cap recovers that selected seed and
+avoids collapse in two fresh seeds. PPO still has higher native return on both
+fresh seeds. The follow-up narrows the exploration problem but does not resolve
+initialization robustness across maps or establish an inference advantage.
 
 This dependence on a guide is part of the method's cost and limitation.
 Improvement over an under-budget initializer does not establish improvement

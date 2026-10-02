@@ -13,6 +13,9 @@ import numpy as np
 
 from .artifacts import load_grid_spec, software_environment, source_tree_sha256
 from .budget import complete_episode_stop_threshold
+from .checkpoints import CheckpointRecorder, validate_checkpoint_allowances
+from .checkpoint_storage import AtomicPolicySnapshotSink
+from .checkpoint_evaluation import save_evaluated_checkpoints
 from .baselines import (
     CEMConfig,
     DiscreteSACConfig,
@@ -76,6 +79,8 @@ class ExperimentConfig:
     strict_transition_budget: bool = False
     beta: float = 1.0
     evaluation_policy_samples: int = 2_000
+    checkpoint_allowances: tuple[int, ...] | None = None
+    checkpoint_persist_during_training: bool = False
     direct_policy_samples: int = 32
     direct_rollouts_per_policy: int = 4
     learning_rate: float = 0.02
@@ -99,6 +104,7 @@ class ExperimentConfig:
     sac_alpha: float = 0.1
     sac_tau: float = 0.01
     sac_updates_per_transition: int = 1
+    sac_adam_backend: str = "default"
     cem_population_size: int = 64
     cem_elite_fraction: float = 0.2
     cem_rollouts_per_policy: int = 4
@@ -130,6 +136,15 @@ class ExperimentConfig:
     mcmc_prior_initialize_hot_replicas: bool = False
     mcmc_seed: int | None = None
     mcmc_tape_seed: int | None = None
+
+    def __post_init__(self):
+        if type(self.checkpoint_persist_during_training) is not bool:
+            raise ValueError("checkpoint_persist_during_training must be a boolean")
+        if self.checkpoint_persist_during_training and self.checkpoint_allowances is None:
+            raise ValueError("Durable checkpoints require checkpoint_allowances")
+        if self.checkpoint_allowances is not None:
+            object.__setattr__(self, "checkpoint_allowances",
+                validate_checkpoint_allowances(self.checkpoint_allowances, self.transition_budget))
 
     @classmethod
     def from_json(cls, path: Path) -> "ExperimentConfig":
@@ -314,6 +329,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
     }
     if config.method not in allowed_methods:
         raise ValueError(f"unknown method {config.method!r}")
+    if config.checkpoint_allowances is not None and config.method not in {
+            "direct_elbo", "ppo_warmstart_elbo", "reinforce", "ppo", "sac", "cem", "double_q"}:
+        raise ValueError(f"Learning checkpoints are not implemented for {config.method}")
     strict_methods = {"direct_elbo", "ppo_warmstart_elbo", "reinforce", "ppo", "sac", "cem", "double_q", "random", "oracle"}
     if config.strict_transition_budget and config.method not in strict_methods:
         raise ValueError(f"Strict total budgeting is not implemented for {config.method}")
@@ -344,6 +362,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
         or config.sac_alpha < 0.0
         or not 0.0 < config.sac_tau <= 1.0
         or config.sac_updates_per_transition <= 0
+        or config.sac_adam_backend not in {"default", "fused"}
     ):
         raise ValueError("invalid discrete-SAC hyperparameters")
     if (
@@ -423,10 +442,21 @@ def run_experiment(config: ExperimentConfig) -> Path:
         )
     goal_states = tuple(state_of(spec, cell) for cell in spec.goals)
     final_dir = Path(config.output_root).resolve() / config.run_id
+    source_hash, source_file_count = source_tree_sha256(Path(__file__).resolve().parents[1])
     if (final_dir / "DONE").exists():
         saved_config = ExperimentConfig(**json.loads((final_dir / "config.json").read_text(encoding="utf-8")))
         if asdict(saved_config) != asdict(config):
             raise ValueError("Completed run_id belongs to a different configuration; use a new run_id")
+        saved_environment = json.loads((final_dir / "environment.json").read_text(encoding="utf-8"))
+        _, saved_map_hash = load_grid_spec(final_dir / "map.json")
+        if saved_map_hash != map_hash or saved_environment.get("map_hash") != map_hash:
+            raise ValueError("Completed run_id belongs to different map contents; use a new run_id")
+        if saved_environment.get("source_snapshot_sha256") != source_hash:
+            raise ValueError("Completed run_id belongs to a different executable snapshot; use a new run_id")
+        # DONE is not sufficient when the result file is missing or damaged.
+        saved_result = json.loads((final_dir / "result.json").read_text(encoding="utf-8"))
+        if not isinstance(saved_result, dict) or saved_result.get("method") != config.method:
+            raise ValueError("Completed run_id has an invalid result artifact")
         return final_dir
     if final_dir.exists():
         raise FileExistsError(f"partial output already exists: {final_dir}")
@@ -444,7 +474,6 @@ def run_experiment(config: ExperimentConfig) -> Path:
         "slurm_job_id": os.getenv("SLURM_JOB_ID"),
         "slurm_array_task_id": os.getenv("SLURM_ARRAY_TASK_ID"),
     }
-    source_hash, source_file_count = source_tree_sha256(Path(__file__).resolve().parents[1])
     environment["source_snapshot_sha256"] = source_hash
     environment["source_snapshot_file_count"] = source_file_count
     (work_dir / "environment.json").write_text(json.dumps(environment, indent=2) + "\n", encoding="utf-8")
@@ -498,6 +527,12 @@ def run_experiment(config: ExperimentConfig) -> Path:
         block_catalog_artifact: np.ndarray | None = None
         primary_committed_policies: np.ndarray | None = None
         primary_committed_weights: np.ndarray | None = None
+        checkpoint_sink = (AtomicPolicySnapshotSink(work_dir / "checkpoint_progress",
+            config.checkpoint_allowances, (mdp.num_states, mdp.num_actions))
+            if config.checkpoint_persist_during_training else None)
+        checkpoints = (CheckpointRecorder(config.checkpoint_allowances, mdp.num_states, mdp.num_actions, sink=checkpoint_sink)
+                       if config.checkpoint_allowances is not None else None)
+        checkpoint_kwargs = ({"checkpoint_observer": checkpoints.stage()} if checkpoints is not None else {})
         if config.method == "random":
             result["value"] = result["random_committed_value"]
             result["marginal_action_value"] = result["random_marginal_value"]
@@ -525,6 +560,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     transition_budget=config.transition_budget,
                     strict_transition_budget=config.strict_transition_budget,
                 ),
+                **checkpoint_kwargs,
             )
             proposal = distribution.probabilities().detach().cpu().numpy()
             full_probabilities = _complete_probability_matrix(mdp, proposal)
@@ -688,6 +724,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     count_bonus_coefficient=config.ppo_count_bonus,
                     seed=config.training_seed,
                 ),
+                **({"checkpoint_observer": checkpoints.stage("guide")} if checkpoints is not None else {}),
             )
             warm_start_probabilities = warm_start.action_probabilities
             if config.strict_transition_budget:
@@ -718,6 +755,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
                     strict_transition_budget=config.strict_transition_budget,
                 ),
                 initial_logits=initial_logits,
+                **({"checkpoint_observer": checkpoints.stage("refinement", warm_start.transitions)}
+                   if checkpoints is not None else {}),
             )
             history = []
             for row in warm_start.history:
@@ -1340,6 +1379,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         value_learning_rate=config.reinforce_value_learning_rate,
                         seed=config.training_seed,
                     ),
+                    **checkpoint_kwargs,
                 )
             elif config.method == "ppo":
                 trained = train_ppo(
@@ -1356,6 +1396,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         count_bonus_coefficient=config.ppo_count_bonus,
                         seed=config.training_seed,
                     ),
+                    **checkpoint_kwargs,
                 )
             elif config.method == "sac":
                 trained = train_discrete_sac(
@@ -1370,7 +1411,9 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         tau=config.sac_tau,
                         updates_per_transition=config.sac_updates_per_transition,
                         seed=config.training_seed,
+                        adam_backend=config.sac_adam_backend,
                     ),
+                    **checkpoint_kwargs,
                 )
             elif config.method == "cem":
                 trained = train_cem(
@@ -1384,6 +1427,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         min_action_probability=config.cem_min_action_probability,
                         seed=config.training_seed,
                     ),
+                    **checkpoint_kwargs,
                 )
             elif config.method == "double_q":
                 trained = train_double_q(
@@ -1396,6 +1440,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
                         exploration_fraction=config.double_q_exploration_fraction,
                         seed=config.training_seed,
                     ),
+                    **checkpoint_kwargs,
                 )
             else:
                 raise AssertionError(f"unhandled learned method {config.method!r}")
@@ -1472,6 +1517,11 @@ def run_experiment(config: ExperimentConfig) -> Path:
             else "policy_sample_then_commit"
         )
         _add_comparison_metadata(config, result)
+        if checkpoints is not None:
+            result.update(save_evaluated_checkpoints(checkpoints, work_dir, mdp, goal_states,
+                config.evaluation_policy_samples, config.training_seed + 8_000_003,
+                int(result["simulator_steps"]), policy_probabilities_artifact,
+                return_oracle.initial_value, goal_oracle.initial_value))
         result["elapsed_seconds"] = time.time() - started
         if policy_probabilities_artifact is not None:
             policy_path = work_dir / "policy_probabilities.npy"

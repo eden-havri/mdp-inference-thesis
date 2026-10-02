@@ -1,5 +1,15 @@
 # Fail-fast experiment and Slurm plan
 
+## Current plan: 1 October 2026
+
+Use `next_compute_stage_2026-10-01.md` as the continuation entry point. It adds
+the frozen unchanged public policy-VSMC reference, bug-fix-only and matched-family
+ablations, all five learned baselines plus random/oracle, and costed staged
+dispatch. The older 540-job sizing below is historical, not an active manifest.
+All 16 VI/PPO calibration and six allocation-follow-up rows are now audited.
+Their development results are not final submission-paper evidence. No new array
+was launched in the 1 October replanning checkpoint.
+
 ## Current decision (29 September 2026)
 
 Latest execution record: `inference_selection_2026-09-29.md`. The bounded

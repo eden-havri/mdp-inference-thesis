@@ -20,16 +20,19 @@ The empirical design separates gradient correctness, variational family
 error, and control performance. Strict interaction caps include guide
 training and refinement; native stochastic execution and committed-policy
 execution are both reported. Preliminary GridWorld studies favor one
-rollout per policy in a medium-map allocation test and find similar values
-to exploration-assisted PPO in one matched-budget comparison. A failed hard
+rollout per policy in a medium-map allocation test. A failed hard
 run exposes insufficient exploration; reallocating the same budget toward
 guide training improves its subsequent control without eliminating the gap
-between execution rules. These are development results, not confirmatory
-superiority or general posterior-fidelity claims.
+between execution rules. A subsequent sixteen-run BGU calibration retains
+all independent-guide outcomes, including a medium-map failure in one of three
+primary-map seeds. Assisted PPO has higher return in seven of eight map--seed
+pairs. A separately bounded medium-map reallocation recovers the selected
+failed seed and avoids collapse in two fresh seeds; assisted PPO still has
+higher native return on both fresh seeds. This limited follow-up does not
+establish general robustness. These are development results, not confirmatory superiority
+or general posterior-fidelity claims.
 
-The thesis also documents exact-score and fixed-bank policy MCMC,
-replicated SMC, their validation contracts, and unsuccessful development
-configurations. The planned larger comparison includes REINFORCE, PPO-Clip,
-discrete SAC, categorical cross-entropy search, and Double Q-learning.
-Independent guide seeds, held-out maps, family-error analysis, and the
-complete cost--performance comparison remain necessary before final conclusions.
+The thesis also documents alternative policy samplers and their failed
+development configurations. An exact small-MDP diagnostic separates family
+error from control quality. The full five-baseline comparison and held-out
+evaluation remain necessary before final conclusions.

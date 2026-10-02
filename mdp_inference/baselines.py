@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .checkpoints import CheckpointStage
 from .mdp import FiniteHorizonMDP
 from .simulation import discounted_returns_to_go, simulate_episode
 
@@ -48,7 +49,8 @@ class ReinforceConfig:
     log_every_updates: int = 10
 
 
-def train_reinforce(mdp: FiniteHorizonMDP, config: ReinforceConfig) -> BaselineResult:
+def train_reinforce(mdp: FiniteHorizonMDP, config: ReinforceConfig, *,
+                    checkpoint_observer: CheckpointStage | None = None) -> BaselineResult:
     rng = np.random.default_rng(config.seed)
     torch.manual_seed(config.seed)
     model = TabularActorCritic(mdp)
@@ -57,6 +59,8 @@ def train_reinforce(mdp: FiniteHorizonMDP, config: ReinforceConfig) -> BaselineR
     transitions = 0
     update = 0
     history: list[dict[str, float]] = []
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(0, lambda: _full_policy_probabilities(model.actor_logits), "initial")
     while transitions < config.transition_budget:
         states: list[int] = []
         actions: list[int] = []
@@ -94,6 +98,8 @@ def train_reinforce(mdp: FiniteHorizonMDP, config: ReinforceConfig) -> BaselineR
         value_loss.backward()
         value_optimizer.step()
         _assert_finite(model, "REINFORCE")
+        if checkpoint_observer is not None:
+            checkpoint_observer.capture(transitions, lambda: _full_policy_probabilities(model.actor_logits))
 
         if update % config.log_every_updates == 0 or transitions >= config.transition_budget:
             history.append(
@@ -106,6 +112,8 @@ def train_reinforce(mdp: FiniteHorizonMDP, config: ReinforceConfig) -> BaselineR
                 }
             )
         update += 1
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(transitions, lambda: _full_policy_probabilities(model.actor_logits), "final")
     return BaselineResult(_full_policy_probabilities(model.actor_logits), transitions, history)
 
 
@@ -124,7 +132,8 @@ class PPOConfig:
     seed: int = 0
 
 
-def train_ppo(mdp: FiniteHorizonMDP, config: PPOConfig) -> BaselineResult:
+def train_ppo(mdp: FiniteHorizonMDP, config: PPOConfig, *,
+              checkpoint_observer: CheckpointStage | None = None) -> BaselineResult:
     if config.count_bonus_coefficient < 0.0:
         raise ValueError("count_bonus_coefficient must be nonnegative")
     if config.snapshot_interval_updates < 0:
@@ -138,6 +147,8 @@ def train_ppo(mdp: FiniteHorizonMDP, config: PPOConfig) -> BaselineResult:
     state_visit_counts = np.zeros(mdp.num_states, dtype=np.int64)
     history: list[dict[str, float]] = []
     snapshots: list[np.ndarray] = []
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(0, lambda: _full_policy_probabilities(model.actor_logits), "initial")
     while transitions < config.transition_budget:
         states: list[int] = []
         actions: list[int] = []
@@ -205,6 +216,8 @@ def train_ppo(mdp: FiniteHorizonMDP, config: PPOConfig) -> BaselineResult:
                 last_value_loss = value_loss.detach()
                 last_clip_fraction = (torch.abs(ratio - 1.0) > config.clip_ratio).double().mean().detach()
         _assert_finite(model, "PPO")
+        if checkpoint_observer is not None:
+            checkpoint_observer.capture(transitions, lambda: _full_policy_probabilities(model.actor_logits))
         history.append(
             {
                 "update": float(update),
@@ -223,6 +236,8 @@ def train_ppo(mdp: FiniteHorizonMDP, config: PPOConfig) -> BaselineResult:
             snapshots.append(_full_policy_probabilities(model.actor_logits))
         update += 1
     snapshot_array = np.stack(snapshots, axis=0) if snapshots else None
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(transitions, lambda: _full_policy_probabilities(model.actor_logits), "final")
     return BaselineResult(
         _full_policy_probabilities(model.actor_logits),
         transitions,
@@ -243,6 +258,7 @@ class DiscreteSACConfig:
     updates_per_transition: int = 1
     seed: int = 0
     log_every: int = 1_000
+    adam_backend: str = "default"
 
 
 def _discrete_sac_td_targets(
@@ -299,7 +315,13 @@ def _discrete_sac_td_targets(
     return targets
 
 
-def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> BaselineResult:
+def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig, *,
+                       checkpoint_observer: CheckpointStage | None = None) -> BaselineResult:
+    if config.adam_backend not in {"default", "fused"}:
+        raise ValueError("SAC adam_backend must be default or fused")
+    # Execution-only optimization: same dtype, gradients, moments and update
+    # schedule. Unsupported builds fail explicitly; there is no silent fallback.
+    adam_options = {} if config.adam_backend == "default" else {"fused": True}
     rng = np.random.default_rng(config.seed)
     torch.manual_seed(config.seed)
     actor_logits = nn.Parameter(torch.zeros((mdp.num_states, mdp.num_actions), dtype=torch.float64))
@@ -315,8 +337,8 @@ def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> Base
     )
     target_q1 = q1.detach().clone()
     target_q2 = q2.detach().clone()
-    actor_optimizer = torch.optim.Adam([actor_logits], lr=config.learning_rate)
-    critic_optimizer = torch.optim.Adam([q1, q2], lr=config.learning_rate)
+    actor_optimizer = torch.optim.Adam([actor_logits], lr=config.learning_rate, **adam_options)
+    critic_optimizer = torch.optim.Adam([q1, q2], lr=config.learning_rate, **adam_options)
     replay: deque[tuple[int, int, int, float, int, bool]] = deque(
         maxlen=config.replay_capacity
     )
@@ -325,6 +347,8 @@ def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> Base
     episode_returns: list[float] = []
     last_q_loss = torch.zeros((), dtype=torch.float64)
     last_actor_loss = torch.zeros((), dtype=torch.float64)
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(0, lambda: _full_policy_probabilities(actor_logits), "initial")
 
     while transitions < config.transition_budget:
         probabilities = _full_policy_probabilities(actor_logits)
@@ -386,6 +410,10 @@ def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> Base
                         target_q2.mul_(1.0 - config.tau).add_(config.tau * q2)
                     last_q_loss = q_loss.detach()
                     last_actor_loss = actor_loss.detach()
+                if checkpoint_observer is not None:
+                    # After every complete configured actor/critic/target update,
+                    # never in the middle of an optimizer or target update.
+                    checkpoint_observer.capture(transitions, lambda: _full_policy_probabilities(actor_logits))
             if transitions % config.log_every == 0:
                 history.append(
                     {
@@ -412,6 +440,8 @@ def train_discrete_sac(mdp: FiniteHorizonMDP, config: DiscreteSACConfig) -> Base
             )
         if not torch.isfinite(actor_logits).all() or not torch.isfinite(q1).all() or not torch.isfinite(q2).all():
             raise FloatingPointError("non-finite parameter in discrete SAC")
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(transitions, lambda: _full_policy_probabilities(actor_logits), "final")
     return BaselineResult(_full_policy_probabilities(actor_logits), transitions, history)
 
 
@@ -476,7 +506,8 @@ def _deterministic_action_probabilities(
     return probabilities
 
 
-def train_cem(mdp: FiniteHorizonMDP, config: CEMConfig) -> BaselineResult:
+def train_cem(mdp: FiniteHorizonMDP, config: CEMConfig, *,
+              checkpoint_observer: CheckpointStage | None = None) -> BaselineResult:
     """Search for a deterministic stationary policy with tabular CEM.
 
     Each complete generation samples policies from an independent categorical
@@ -498,6 +529,9 @@ def train_cem(mdp: FiniteHorizonMDP, config: CEMConfig) -> BaselineResult:
     history: list[dict[str, float]] = []
     best_policy: np.ndarray | None = None
     best_score = -np.inf
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(0, lambda: np.full(
+            (mdp.num_states, mdp.num_actions), 1.0 / mdp.num_actions), "initial")
 
     while transitions < config.transition_budget:
         generation_start = transitions
@@ -546,6 +580,9 @@ def train_cem(mdp: FiniteHorizonMDP, config: CEMConfig) -> BaselineResult:
                 config.min_action_probability,
             )
             elite_mean = float(score_array[elite_indices].mean())
+            if checkpoint_observer is not None:
+                # CEM returns its best evaluated candidate, not its proposal.
+                checkpoint_observer.capture(transitions, lambda: _deterministic_action_probabilities(mdp, best_policy))
 
         if completed_population:
             score_array = np.asarray(candidate_scores, dtype=np.float64)
@@ -574,6 +611,8 @@ def train_cem(mdp: FiniteHorizonMDP, config: CEMConfig) -> BaselineResult:
     if best_policy is None:
         mode_decisions = np.argmax(probabilities, axis=1)
         best_policy = mdp.policy_from_decisions(mode_decisions)
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(transitions, lambda: _deterministic_action_probabilities(mdp, best_policy), "final")
     return BaselineResult(
         _deterministic_action_probabilities(mdp, best_policy),
         transitions,
@@ -677,7 +716,8 @@ def _stationary_double_q_projection(
     return _greedy_q_probabilities(weighted_q)
 
 
-def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResult:
+def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig, *,
+                   checkpoint_observer: CheckpointStage | None = None) -> BaselineResult:
     """Train finite-horizon tabular Double Q and return a stationary projection."""
 
     _validate_double_q_config(config)
@@ -692,6 +732,8 @@ def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResu
     completed_returns: deque[float] = deque(maxlen=100)
     last_td_error = 0.0
     last_epsilon = config.initial_epsilon
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(0, lambda: _stationary_double_q_projection(q1 + q2, state_time_visits), "initial")
 
     while transitions < config.transition_budget:
         state = mdp.sample_initial(float(rng.random()))
@@ -740,6 +782,8 @@ def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResu
             discount *= mdp.gamma
             transitions += 1
             last_epsilon = epsilon
+            if checkpoint_observer is not None:
+                checkpoint_observer.capture(transitions, lambda: _stationary_double_q_projection(q1 + q2, state_time_visits))
             state = next_state
             if done:
                 completed_returns.append(float(episode_return))
@@ -770,6 +814,8 @@ def train_double_q(mdp: FiniteHorizonMDP, config: DoubleQConfig) -> BaselineResu
         )
     if not np.isfinite(q1).all() or not np.isfinite(q2).all():
         raise FloatingPointError("non-finite value in Double Q-learning")
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(transitions, lambda: _stationary_double_q_projection(q1 + q2, state_time_visits), "final")
     return BaselineResult(
         _stationary_double_q_projection(q1 + q2, state_time_visits),
         transitions,

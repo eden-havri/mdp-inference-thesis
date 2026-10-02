@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 from .budget import reserved_policy_batch_size
+from .checkpoints import CheckpointStage
 from .exact import _enumerated_policies
 from .mdp import FiniteHorizonMDP
 
@@ -178,6 +179,7 @@ def train_direct_elbo(
     mdp: FiniteHorizonMDP,
     config: DirectELBOTrainConfig,
     initial_logits: torch.Tensor | None = None,
+    *, checkpoint_observer: CheckpointStage | None = None,
 ) -> tuple[TabularPolicyDistribution, list[dict[str, float]]]:
     if config.iterations <= 0:
         raise ValueError("iterations must be positive")
@@ -194,6 +196,12 @@ def train_direct_elbo(
     torch_generator.manual_seed(config.seed)
     history: list[dict[str, float]] = []
     total_simulator_steps = 0
+    def checkpoint_probabilities():
+        full = np.full((mdp.num_states, mdp.num_actions), 1.0 / mdp.num_actions)
+        full[np.asarray(distribution.decision_states, dtype=np.int64)] = distribution.probabilities().detach().cpu().numpy()
+        return full
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(0, checkpoint_probabilities, "initial")
     for iteration in range(config.iterations):
         count = config.num_policy_samples
         if config.strict_transition_budget:
@@ -220,6 +228,8 @@ def train_direct_elbo(
         total_simulator_steps += sample.simulator_steps
         if config.strict_transition_budget and total_simulator_steps > config.transition_budget:
             raise AssertionError("Direct ELBO exceeded its reserved transition cap")
+        if checkpoint_observer is not None:
+            checkpoint_observer.capture(total_simulator_steps, checkpoint_probabilities)
         history.append(
             {
                 "iteration": float(iteration),
@@ -232,4 +242,6 @@ def train_direct_elbo(
         )
         if config.transition_budget is not None and total_simulator_steps >= config.transition_budget:
             break
+    if checkpoint_observer is not None:
+        checkpoint_observer.capture(total_simulator_steps, checkpoint_probabilities, "final")
     return distribution, history

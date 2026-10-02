@@ -1,15 +1,17 @@
 \DocSection{Experimental Design}
 \label{sec:experiments}
 
-The empirical study asks four separate questions: (i) does an implementation
-sample the stated target, (ii) does tempering mix across relevant policy modes,
-(iii) do target samples control the environment well under policy commitment,
-and (iv) what simulator and compute cost is required?  Success on the control
-metric cannot substitute for failure on target fidelity or mixing.
+The empirical study separates four questions: (i) does the implementation
+estimate the stated objective correctly, (ii) what approximation or optimization
+error remains, (iii) how well does the learned distribution control the
+environment under each execution rule, and (iv) what simulator and compute cost
+is required? Direct variational learning is the practical candidate. Sampling
+alternatives additionally require target-fidelity and mixing diagnostics;
+their failures are not silently reinterpreted as successful inference.
 
 \DocSubsection{Domains and scope}
 
-Stochastic GridWorld is the complete primary study.  Easy, medium, and hard
+Stochastic GridWorld is the planned primary study.  Easy, medium, and hard
 families use, respectively, \(8\!\times\!8\), \(16\!\times\!16\), and
 \(32\!\times\!32\) grids; wall fractions of 9.4\%, 19.9\%, and 30.0\%; action
 success probabilities of 0.90, 0.80, and 0.75; and horizons 64, 160, and 384.
@@ -22,7 +24,7 @@ policy even when enumerating all policies is impossible.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/gridworld-tiers.pdf}
-  \caption{Representative development maps for the three GridWorld tiers.
+  \caption[Development maps for the three GridWorld tiers]{Representative development maps for the three GridWorld tiers.
   White cells are traversable, dark cells are walls, blue marks the start,
   and gold marks the goal.  Held-out maps are frozen separately and remain
   unused during method development and tuning.}
@@ -111,8 +113,8 @@ simulator-only access: the current path/recovery block builder reads exact
 successor probabilities. Such runs remain model-assisted even when scores
 come from rollouts. In a simulator-only stratum, that builder must be disabled
 or replaced by separately counted simulator-based construction. Eligible
-fixed-tape variants and the five learned competitors then receive the same
-generative-simulator access. Exact-model
+fixed-tape variants, direct variational learning with its PPO initializer, and
+the five learned competitors receive generative-simulator access. Exact-model
 tempering may be displayed beside simulator-only learners as a descriptive
 reference, but such a cross-stratum table cannot support a sample-efficiency
 superiority claim.  Model value evaluations, simulator transitions, and guide
@@ -126,8 +128,11 @@ entire episode.  For an explicit particle or MCMC sample, that complete policy
 is used directly.  For statewise categorical outputs, one action is sampled
 once at every decision state before evaluation.  Primary metrics are mean exact
 expected return and exact goal-reaching probability over these committed
-policies.  Their sample standard deviation and standard error describe
-variation over policy draws.
+policies. For independent VI or baseline policy draws, the sample standard
+deviation describes policy variation and the standard error describes
+conditional evaluation precision. Neither measures uncertainty across training
+runs. Correlated MCMC draws or resampled particles require separate dependence
+and ancestry diagnostics; the independent-draw formula is not valid for them.
 
 This rule is an intervention on stochastic baseline outputs, not their native
 deployment semantics. Native per-visit stochastic value is therefore a
@@ -153,27 +158,30 @@ The inverse temperature defines the target and is not selected after observing
 held-out control performance.  Exact diagnostic maps use a predeclared
 sensitivity grid; the headline GridWorld target freezes one value on seed-zero
 development maps.  The current development value is \(\beta=64\).  Any
-additional value is reported as target sensitivity with separate mixing and
-cost diagnostics, not as a best-of-grid result.
+additional value is reported as target sensitivity with appropriate
+approximation and cost diagnostics, not as a best-of-grid result.
 
-All interactions used by PPO guide training, SMC, policy-bank evaluation, and
-sample-average MCMC count toward the proposed method.  Exact policy-value
+All interactions used by PPO guide training, variational refinement, SMC,
+policy-bank evaluation, and sample-average MCMC count toward the proposed method.  Exact policy-value
 evaluations, optimizer updates, wall time, CPU or accelerator time, and peak
 memory are reported separately.  A generally applicable exploration aid is
 offered to compatible methods or labeled as a separate assisted ablation.
 Competitor bugs are fixed; no baseline is weakened to improve a comparison.
 
-The current \texttt{transition\_budget} field is a guide-training allowance
-for tempering; the subsequent sampler adds cost. Counting that cost does not
-enforce a matched total budget. Confirmatory comparisons require a declared
-total-budget allocation or common cost checkpoints before dispatch. Continued
-PPO training under the same total allowance is an essential control for
-attributing any advantage to inference.
+New variational and baseline runs enable \texttt{strict\_transition\_budget}:
+the declared allowance is a maximum for all training transitions, including
+the initializer. Refinement receives the total minus actual guide usage.
+Complete-return reservation can leave a small unused allowance, which is
+reported. Historical tempering configurations retain different semantics:
+their \texttt{transition\_budget} covers guide training, and subsequent sampling
+adds cost. They are not relabeled as strict-cap comparisons. Full-budget PPO
+under the same allowance is an essential attribution control; the current
+control starts from scratch, rather than resuming the guide optimizer.
 
 \DocSubsection{Cost-effective execution order}
 
-After gates G0--G3 in Section~\ref{sec:validation}, one seed and the smallest
-budget run for every method on each map family.  Only finite, semantically valid
+After the claim-specific checks in Section~\ref{sec:validation}, one seed and
+the smallest budget run for every method on each map family.  Only finite, semantically valid
 runs advance to a three-seed timing and learning pilot.  That pilot estimates
 resource requests and identifies clearly dominated settings.  Hyperparameters
 are then tuned on designated development instances.  Finally, one frozen
@@ -187,7 +195,149 @@ Tireworld work begins only after the GridWorld confirmatory manifest is frozen.
 
 \DocSubsection{Current empirical status}
 
-Confirmatory values are \textbf{TBD}.  Preliminary medium-GridWorld exact-value
+The confirmatory study remains incomplete. All numerical results below are
+development diagnostics; held-out maps have not supplied tuning decisions.
+
+\DocSubsubsection{Variational allocation and full-budget controls}
+
+A cached medium-map PPO guide trained for 200,015 transitions initialized three
+independent refinements per rollout setting. With approximately one million
+additional transitions, \(K=1\) produced committed returns 0.581, 0.595, and
+0.548; \(K=4\) produced -0.144, -0.244, and -0.087. The corresponding update
+counts were 662--669 versus 157--160. Every refinement improved its paired guide
+estimate and estimated ELBO. Evaluation used 512 independent policy draws,
+coupled within each guide/refinement pair. These refinements share one guide
+and map, so they do not establish robustness across independently trained guides.
+
+\input{shared/results/medium-development-table}
+Fresh-guide, strict-cap runs then used nominally 200k guide transitions and 1M
+refinement transitions. On the easy map, committed value rose from the guide's
+3.010 to 3.318, below the nonstationary upper control 3.451. Actual usage was
+1,199,880 transitions. The medium run used 1,199,725 transitions and achieved
+committed value 0.725 versus its guide's -0.225.
+Table~\ref{tab:medium-development} includes full-budget PPO controls at the same
+medium training seed 572. The VI guide used count-bonus coefficient 1.0;
+refinement used original rewards. Assisted PPO used coefficient 1.0 throughout,
+and standard PPO used zero. Both controls trained from scratch.
+
+VI's committed value is slightly above assisted PPO's and its native value is
+slightly below. The committed difference 0.069 is smaller than the combined
+conditional evaluation standard error. Neither equivalence nor superiority is
+established. The shorter local runtime is likewise one observation, not a
+general speedup claim. These runs share executable snapshot and map; their
+wall times include offline exact evaluation and use one numerical-library thread.
+
+\DocSubsubsection{Hard-map exploration and execution semantics}
+
+\input{shared/results/development-comparison-figure}
+Figure~\ref{fig:development-execution} displays the same completed development
+runs under both execution rules. The hard-panel allocation change is separately
+labeled; it is not an increase in the total simulator allowance.
+
+The unchanged 200k-guide allocation failed on hard map zero with seed 573:
+all guide and refinement batches returned the no-goal value -38.4. The estimated
+ELBO rose through reduced KL, without improved control. The map is not
+unreachable: its finite-horizon upper return control is -4.001.
+
+A separately frozen two-step diagnostic first trained full-budget assisted PPO.
+Its first successful batch occurred near 538k transitions, beyond the original
+guide allowance. Native goal probability reached 0.995. This satisfied the
+predeclared condition for testing a 1M-guide/200k-refinement reallocation at the
+same total cap, map, and seed. That run consumed 999,721 guide and 199,549
+refinement transitions. It achieved committed return -19.219 (conditional MCSE
+0.679), compared with its guide's -23.077. Native return was -6.775.
+
+Committed goal probability reached 0.700, versus zero with the short guide;
+native action resampling reached 0.993. Full-budget assisted PPO achieved
+committed return -20.900 and native return -6.415, with goal probabilities
+0.637 and 0.995 respectively. Wall times were 132.4 seconds for reallocated
+VI and 133.9 seconds for assisted PPO, including evaluation. This single-seed
+allocation diagnostic supports testing independent guide seeds, not a general
+hard-grid success or superiority claim. The large execution gap is also a
+counterexample to treating policy commitment itself as a control advantage.
+
+\DocSubsubsection{Independent-guide BGU calibration}
+
+\input{shared/results/cluster-calibration-table}
+\input{shared/results/cluster-calibration-figure}
+The next frozen screen completed all 16 runs on BGU compute nodes. Training
+seeds 601--603 were used on medium and hard development map zero, and seed
+604 on separately reserved development map 100 in each tier. Held-out maps
+1--3 remained unused. The total cap was 1.2M transitions per run, with nominal
+VI guide allocations of 200k on medium and 1M on hard. The target, learning
+rate, count bonus, and $N=32$, $K=1$ settings were fixed before dispatch.
+PPO used count bonus 1 throughout; VI used it only in initialization and
+unshaped rewards during refinement. These are explicitly assisted comparisons.
+
+Every artifact passed checks of configuration, map hash, executable snapshot,
+strict budget, finite oracle-bounded metrics, and Slurm provenance. The cluster
+cohort shares its software environment and is not pooled with older local
+timing or seed results. Evaluation uses 256 independent complete-policy draws;
+their conditional Monte Carlo precision is not uncertainty across training runs.
+The plotted arithmetic means in Figure~\ref{fig:cluster-calibration} retain
+every seed, including the failed medium run. Table~\ref{tab:cluster-calibration}
+also reports the second-map checks separately rather than blending maps.
+
+PPO has higher committed and native return in seven of the eight paired
+map--seed comparisons. Primary-map mean committed returns are -4.973 versus
+0.449 on medium and -17.597 versus -15.493 on hard (VI versus PPO).
+The corresponding native means are -4.695 versus 0.970 and -6.884 versus
+-6.076. The second development maps also favor PPO in return under both rules.
+This does not establish a universal ranking, but it contradicts extrapolating
+the earlier favorable single-seed pilot into a robustness claim.
+
+Medium seed 602 isolates the failure. Its guide stops at 199,923 transitions
+with native return -15.936 and committed return -15.999. Every one of its 196
+refinement minibatches returns -16 with essentially zero between-policy return
+variation. The estimated ELBO rises from -1140.570 to -1026.622 through the
+entropy term, not successful navigation. Final native goal probability is
+0.00371; committed goal probability is approximately $3.1\times10^{-6}$.
+Continued assisted PPO with the same seed reaches its first positive batch
+mean at 318,132 transitions. Some guide batches had successful trajectories
+earlier, so first-ever success is not by itself a sufficient handoff criterion.
+
+The primary medium-map mean wall times are 40.5 seconds for VI and 130.4 for
+PPO; hard-map means are 170.0 and 174.6 seconds. They include offline evaluation
+and describe this CPU implementation, not hardware-independent algorithmic
+complexity. A shorter failed run is not a performance advantage. A separate
+hard-grid SAC throughput screen consumed 4,992 transitions in 325.56 seconds;
+its larger conditional profile was therefore not released. That tiny-budget
+profile is cost evidence only, not a fair SAC control-performance comparison.
+
+\DocSubsubsection{Bounded allocation follow-up}
+
+\input{shared/results/allocation-followup-table}
+\input{shared/results/allocation-followup-figure}
+A separately frozen follow-up reallocated the medium allowance to 600k guide
+and the remainder refinement, without changing either algorithm's updates or
+increasing total interactions. Selected failure seed 602 recovered to committed
+goal probability 0.9863 and native probability 0.9996. This satisfied the
+predeclared conditions for two fresh paired seeds, 606 and 607, and a second-map
+VI check using seed 604. The repair is not pooled into the fresh-seed estimate.
+
+Both fresh VI runs avoid collapse, with committed goal probabilities 0.9910
+and 0.9779; native probabilities exceed 0.9998 for both methods. Committed
+returns are 0.628 and -0.004 for VI versus 0.626 and 0.258 for PPO. Native
+returns are 0.975 and 0.737 versus 1.055 and 0.874. Thus the improvement removes
+the observed exploration failure but does not establish superiority: PPO still
+has higher native return on both fresh seeds. On development map 100, VI has
+committed/native returns 0.752/1.050 versus the existing PPO control's
+0.781/1.048. These near values are descriptive, not an equivalence test.
+
+All six completed follow-up artifacts passed the integrity audit. Two PPO
+attempts were interrupted by an unhandled Slurm warning signal; the launcher
+was corrected and only those attempts were repeated from scratch at the same
+five-minute wall limit. Failed logs and partial artifacts are retained and
+their wasted compute is counted separately. No completed scientific outcome
+was replaced. Follow-up timings come from a different node than the original
+calibration; only the within-follow-up fresh pairs have matched hardware.
+Their mean wall times, including evaluation, are 102.5 seconds for VI and
+182.0 for PPO. This small CPU comparison motivates a costed larger study,
+not a general speedup claim. Held-out maps remain unused.
+
+\DocSubsubsection{Sampling alternatives: development findings}
+
+Preliminary medium-GridWorld exact-value
 tempering diagnostics produced high-return committed policies but exposed a sharp
 intermediate-temperature exchange bottleneck.  Four independent 32-temperature,
 power-four chains, including an overdispersed chain, each retained 800 draws.
@@ -215,14 +365,16 @@ every tenth subsequent state. Low-initialized chains remained near return
 useful bidirectional crossings on the other chains. These measurements do not
 estimate the relative posterior mass of the regions.
 
-A bounded guide-field replica-exchange prototype is now being assessed.
-Its intermediate distributions can differ from ordinary temperature scaling,
-but its endpoint must remain the declared target. An initial rectangular path
-was strongly initialization-dependent and is not a validated replacement.
-Each revised path requires exact small-state checks and separately frozen
-development diagnostics before longer runs. Historical failed gates remain
-failed. Full-scale arrays require both sampling adequacy and a resolved
-information-access, evaluation, and total-cost contract.
+A bounded three-seed guide-field replica-exchange screen subsequently found
+high-return policies but did not validate sampling adequacy. Return effective
+sample sizes were 28--66, split \(\widehat R\) was 1.032, maximum between-chain
+coordinate total variation was 0.578, and completed round trips were 0, 1, and 1.
+A fixed-bank SMC screen retained only 3, 4, and 4 root ancestors from 256
+particles and returned values near -16. These alternatives have different
+costs and information access; they are not pooled into a simulator-efficiency
+leaderboard. Historical failed checks remain failed. The practical VI candidate
+instead requires family-error, learning-stability, and execution-aware control
+checks before full-scale confirmation.
 
 \begin{table}[t]
   \centering
@@ -233,9 +385,10 @@ information-access, evaluation, and total-cost contract.
     \toprule
     Question & Comparison & Primary report \\
     \midrule
-    Target correctness & exact enumeration & distribution error and mode mass \\
-    Mixing & chains and ladders & ESS, swaps, and between-chain agreement \\
-    Control quality & five competitors & committed return and goal probability \\
+    Estimator correctness & exact differentiation & gradient error under stochastic visitation \\
+    Family error & enumerable posterior & variational gap and omitted dependence \\
+    Sampling alternatives & chains and ladders & ESS, swaps, ancestry, and agreement \\
+    Control quality & five competitors & native and committed return and goal probability \\
     Robustness & map families and seeds & uncertainty and failed-run count \\
     Scalability & matched accounting & interactions, time, and memory \\
     \bottomrule

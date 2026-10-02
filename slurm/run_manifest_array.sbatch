@@ -7,11 +7,13 @@
 #SBATCH --mem=2G
 #SBATCH --tmp=2G
 #SBATCH --time=02:00:00
-#SBATCH --signal=B:USR1@120
 #SBATCH --output=slurm/logs/%x-%A_%a.out
 #SBATCH --error=slurm/logs/%x-%A_%a.err
 
 set -euo pipefail
+
+# No advance warning signal: there is no checkpoint handler, and an unhandled
+# SIGUSR1 would terminate the batch shell before its requested wall-time cap.
 
 if [[ $# -ne 1 ]]; then
   echo "usage: sbatch --array=0-N%8 slurm/run_manifest_array.sbatch MANIFEST.jsonl" >&2
