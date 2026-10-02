@@ -19,6 +19,13 @@ This directory contains two narratives for the same scientific study:
 
 ## Build
 
+Current versioned source bundle:
+`../output/expected-return-policy-inference-overleaf-draft-20261002.zip`.
+Clean-source rebuilds passed for the5-page paper and77-page thesis, matching
+the reviewed PDF text. Older unversioned exported ZIP/PDF files are historical.
+See`../docs/current_draft_bundle_2026-10-02.md`. Neither output is a finished
+submission: final empirical results and deposit/venue metadata remain pending.
+
 Run either command from this `latex/` directory:
 
 ```text

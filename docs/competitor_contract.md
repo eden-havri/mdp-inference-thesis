@@ -20,14 +20,18 @@ basic trainer and documented logged trainer differ in initialization,schedule
 and checkpoint selection. Basic absolute-logit/fixed-rate/final-iterate runs
 must be named as such, not presented as the full V3 method. A separate unchanged
 own-domain logged run and exact bounded-logged-wrapper parity independently pass;
-see `reference_training_path_audit_2026-10-01.md`. An isolated memory fix has
-correctness witnesses but no full-budget performance result yet. Neither poor
+see `reference_training_path_audit_2026-10-01.md`. Six full-budget logged
+unchanged/memory-only controls now independently pass; memory repair alone has
+no consistent reward improvement in this seed/configuration. Neither poor
 basic-trainer scores nor a large full-system gap prove the repair improves reward.
 
 Full-system comparisons do not isolate an objective when representations,
 initializers, target scales or exploration assistance differ. The planned
 matched-family and guide-attribution ablations address those confounders.
 Historical baseline variants and hashes remain unchanged by this plan.
+The separately frozen guide-without-count-bonus VI control keeps all other
+full-run settings fixed; it uses no new baseline equations. See
+`assistance_control_dispatch_2026-10-02.md`.
 
 Implementation update: SAC now offers an explicitly recorded fused-Adam backend,
 defaulting to the original backend. Actual-trainer gradient/replay/target/moment
