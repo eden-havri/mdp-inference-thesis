@@ -33,6 +33,12 @@ class GridWorldSpec:
     goal_reward: float = 5.0
     hazard_reward: float = -5.0
     gamma: float = 1.0
+    gravel: tuple[tuple[int, int], ...] = ()
+    dirt: tuple[tuple[int, int], ...] = ()
+    meadows: tuple[tuple[int, int], ...] = ()
+    gravel_reward: float = -1.0
+    dirt_reward: float = -0.5
+    meadow_reward: float = 0.5
 
     def __post_init__(self) -> None:
         if self.rows < 2 or self.cols < 2:
@@ -41,7 +47,8 @@ class GridWorldSpec:
             raise ValueError("slip_probability must lie in [0, 1]")
         if self.horizon <= 0:
             raise ValueError("horizon must be positive")
-        cells = {self.start, *self.goals, *self.walls, *self.hazards}
+        groups = (self.goals, self.walls, self.hazards, self.gravel, self.dirt, self.meadows)
+        cells = {self.start, *(cell for group in groups for cell in group)}
         if any(not (0 <= r < self.rows and 0 <= c < self.cols) for r, c in cells):
             raise ValueError("all cells must lie inside the grid")
         if not self.goals:
@@ -50,6 +57,14 @@ class GridWorldSpec:
             raise ValueError("start must be a nonterminal traversable cell")
         if set(self.walls) & (set(self.goals) | set(self.hazards)):
             raise ValueError("walls cannot also be terminal cells")
+        seen = set()
+        for group in groups:
+            if len(set(group)) != len(group) or seen & set(group):
+                raise ValueError("cell types must be disjoint and contain no duplicates")
+            seen.update(group)
+        if not np.isfinite((self.step_reward, self.goal_reward, self.hazard_reward,
+                            self.gravel_reward, self.dirt_reward, self.meadow_reward)).all():
+            raise ValueError("terrain and step rewards must be finite")
 
 
 def state_of(spec: GridWorldSpec, cell: tuple[int, int]) -> int:
@@ -83,6 +98,9 @@ def gridworld_mdp(spec: GridWorldSpec) -> FiniteHorizonMDP:
     walls = set(spec.walls)
     goals = set(spec.goals)
     hazards = set(spec.hazards)
+    terrain_rewards = {cell: spec.gravel_reward for cell in spec.gravel}
+    terrain_rewards.update({cell: spec.dirt_reward for cell in spec.dirt})
+    terrain_rewards.update({cell: spec.meadow_reward for cell in spec.meadows})
     terminals = goals | hazards | walls
 
     for state in range(n_states):
@@ -118,7 +136,7 @@ def gridworld_mdp(spec: GridWorldSpec) -> FiniteHorizonMDP:
                     if next_cell in goals
                     else spec.hazard_reward
                     if next_cell in hazards
-                    else 0.0
+                    else terrain_rewards.get(next_cell, 0.0)
                 )
                 branch_reward[state, action, branch] = spec.step_reward + cell_reward
 

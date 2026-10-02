@@ -1,5 +1,29 @@
 # Fail-fast experiment and Slurm plan
 
+**Active latest override:** `terrain_experiment_redesign_2026-10-02.md` now
+supersedes the small-grid-v1 plan below. Use paired navigation/all-terrain
+meadow panels, sizes3/5/8, all9 learned/control systems plus random and distinct
+return/success oracles. Freeze r4; r3 reporting failure preserved. No protected
+maps or final-study launch before complete independently accounted canaries.
+
+All54 r4 canaries now independently complete (.922778 allocated CPUh).
+Equal100k pilot r1 now completely independently audited/collected: all54 rows,
+5,396,201 active interactions/1.506666667 allocated CPUh. Receipt
+validation/terrain-pilot-complete-independent.json,
+SHA7f0886f1bad7ce7f8f934bf6f861b6c7f7d39317252e5a9d4d5ac52344261ad5.
+No active cluster jobs; paired freshseed100k/200k hard response controller next,
+not yet frozen/launched. No final winner or
+protected results. Latest commands/hashes: TERRAIN_CONTINUATION.md. Follow
+terrain_selection_and_statistics_2026-10-02.md for prospective equal-panel/
+tier native-return selection, paired-geometry handling and final-study limits.
+
+## Primary-suite override: 2 October 2026
+
+The user now requests 3x3 / 5x5 / 8x8 easy/medium/hard grids, with increasing
+wall and swamp densities. `small_grid_reset_2026-10-02.md` takes precedence.
+Preserve all older maps/results/protocols; the large-grid temperature proposal
+and older job-count scenarios below are historical, not the new launch plan.
+
 ## Current plan: 1 October 2026
 
 Use `next_compute_stage_2026-10-01.md` as the continuation entry point. It adds

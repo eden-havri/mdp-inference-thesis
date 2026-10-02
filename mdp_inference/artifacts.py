@@ -49,8 +49,15 @@ def grid_spec_to_dict(spec: GridWorldSpec) -> dict[str, Any]:
     value = asdict(spec)
     for key in ("start",):
         value[key] = list(value[key])
-    for key in ("goals", "walls", "hazards"):
+    for key in ("goals", "walls", "hazards", "gravel", "dirt", "meadows"):
         value[key] = [list(cell) for cell in value[key]]
+    # Preserve the canonical bytes/hash of old no-terrain maps. Never rewrite
+    # archived geometry or change its identity merely by adding optional fields.
+    if (not spec.gravel and not spec.dirt and not spec.meadows
+            and spec.gravel_reward == -1.0 and spec.dirt_reward == -0.5
+            and spec.meadow_reward == 0.5):
+        for key in ("gravel", "dirt", "meadows", "gravel_reward", "dirt_reward", "meadow_reward"):
+            value.pop(key)
     return value
 
 
@@ -68,6 +75,12 @@ def grid_spec_from_dict(value: dict[str, Any]) -> GridWorldSpec:
         goal_reward=float(value.get("goal_reward", 5.0)),
         hazard_reward=float(value.get("hazard_reward", -5.0)),
         gamma=float(value.get("gamma", 1.0)),
+        gravel=tuple(tuple(cell) for cell in value.get("gravel", [])),
+        dirt=tuple(tuple(cell) for cell in value.get("dirt", [])),
+        meadows=tuple(tuple(cell) for cell in value.get("meadows", [])),
+        gravel_reward=float(value.get("gravel_reward", -1.0)),
+        dirt_reward=float(value.get("dirt_reward", -0.5)),
+        meadow_reward=float(value.get("meadow_reward", 0.5)),
     )
 
 
