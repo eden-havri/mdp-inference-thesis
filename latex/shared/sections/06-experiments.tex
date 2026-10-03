@@ -11,25 +11,41 @@ their failures are not silently reinterpreted as successful inference.
 
 \DocSubsection{Domains and scope}
 
-Stochastic GridWorld is the planned primary study.  Easy, medium, and hard
-families use, respectively, \(8\!\times\!8\), \(16\!\times\!16\), and
-\(32\!\times\!32\) grids; wall fractions of 9.4\%, 19.9\%, and 30.0\%; action
-success probabilities of 0.90, 0.80, and 0.75; and horizons 64, 160, and 384.
+Stochastic GridWorld is the planned primary study. Easy, medium, and hard
+families use, respectively, \(3\!\times\!3\), \(5\!\times\!5\), and
+\(8\!\times\!8\) grids. Wall counts are 1, 4, and 13; swamp counts are 1, 3,
+and 9; gravel and dirt counts are each 1, 3, and 9. Relative to all grid cells,
+wall fractions are 11.1\%, 16.0\%, and 20.3\%, and each of the other negative
+terrain fractions is 11.1\%, 12.0\%, and 14.1\%. Action success probabilities
+are 0.90, 0.85, and 0.80, with equal left/right slip; horizons are 20, 40, and 80.
 Frozen-map audits record reachability, shortest-path length and count, and
-single-cell start--goal bottlenecks.  Seed zero maps are development-only;
-held-out maps are frozen before confirmation.  Small instances retain exact enumeration;
+single-cell start--goal bottlenecks. Map zero is used for development calibration;
+maps one and two are reserved for fresh-map validation after configuration
+selection. Protected layouts remain unmaterialized until the final study is
+frozen. Small diagnostic instances retain exact enumeration;
 larger instances retain exact dynamic-programming evaluation of any fixed
 policy even when enumerating all policies is impossible.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figures/gridworld-tiers.pdf}
-  \caption[Development maps for the three GridWorld tiers]{Representative development maps for the three GridWorld tiers.
-  White cells are traversable, dark cells are walls, blue marks the start,
-  and gold marks the goal.  Held-out maps are frozen separately and remain
-  unused during method development and tuning.}
+  \includegraphics[width=\linewidth]{figures/terrain-gridworld-tiers-20261003.pdf}
+  \caption[Paired terrain layouts for the three GridWorld tiers]{Illustrative
+  development layouts for the three GridWorld tiers. Navigation (top) and
+  meadow reward landscapes (bottom) share base geometry, so they are not
+  independent map replicates. S marks the start and G the absorbing goal.
+  These layouts illustrate tasks, not experimental performance. Protected
+  layouts remain unused during method development and tuning.}
   \label{fig:gridworld-tiers}
 \end{figure}
+
+Rewards accrue on arrival: pavement 0, gravel $-1$, dirt $-0.5$, meadow $+0.5$,
+goal $+5$, and swamp $-5$, with an additional $-0.1$ per active transition.
+The goal and swamp absorb; their padded suffix earns zero. A blocked move stays
+in place and pays the actual destination terrain again. The paired reward
+landscape adds 1, 2, and 3 nonterminal meadow cells without changing the base
+geometry. Repeated meadow rewards are intentional: goal rate is not a utility
+selection criterion in this secondary panel. All seven cell types are therefore
+covered, without pooling navigation and meadow returns on an incompatible scale.
 
 Only domains that add a distinct scientific stress test are considered after
 GridWorld passes its medium gates:
@@ -122,26 +138,32 @@ training transitions are therefore reported in separate cost columns.
 
 \DocSubsection{Common evaluation semantics}
 
-For the committed-policy study, the current evaluator samples a complete
+For the committed-policy diagnostic, the evaluator samples a complete
 deterministic policy from the reported distribution and commits to it for the
 entire episode.  For an explicit particle or MCMC sample, that complete policy
 is used directly.  For statewise categorical outputs, one action is sampled
-once at every decision state before evaluation.  Primary metrics are mean exact
-expected return and exact goal-reaching probability over these committed
-policies. For independent VI or baseline policy draws, the sample standard
+once at every decision state before evaluation. The fixed table's expected
+return and goal probability are evaluated exactly; their distributional means
+are estimated with 2,048 independent table draws at the terminal checkpoint.
+The original 64-draw development learning checkpoints remain unchanged and
+their first 64 terminal draws are preserved in the higher-precision attachment.
+For independent VI or baseline policy draws, the sample standard
 deviation describes policy variation and the standard error describes
 conditional evaluation precision. Neither measures uncertainty across training
 runs. Correlated MCMC draws or resampled particles require separate dependence
 and ancestry diagnostics; the independent-draw formula is not valid for them.
 
 This rule is an intervention on stochastic baseline outputs, not their native
-deployment semantics. Native per-visit stochastic value is therefore a
-co-primary result for REINFORCE, PPO, and SAC in practical control comparisons;
-their committed-policy values answer a narrower policy-class question.
+deployment semantics. Practical comparisons and selection use method-native
+expected original return: commitment for the inference distributions and CEM;
+per-visit action draws for PPO, REINFORCE, SAC, and stochastic tie-breaking in
+Double Q. Committed-policy values of stochastic baselines answer a narrower
+policy-class question and cannot replace their native result.
 A sampler's statewise marginals cannot replace its committed-policy result
 because they remove policy-level dependence. The statewise
 maximum-probability policy is also reported separately. Secondary metrics
-include lower-tail return,
+include actual episode-return lower tails (not a histogram of policy expected
+returns), separately counted evaluation interactions,
 distributional target error where enumeration is possible, and mode recovery.
 
 \DocSubsection{Fair budgets and tuning}
@@ -150,16 +172,25 @@ Every comparison uses the same maps, training seeds, evaluation streams,
 horizon, reward, and termination convention.  Current GridWorld runs use
 \(\gamma=1\); discounted baseline semantics must be validated before any
 \(\gamma<1\) experiment.  Method-specific tuning grids are allowed because a
-single global learning rate is not a fair tuning policy, but tuning allowance
-is matched in environment transitions and core-hours.  Tuning maps and seeds
+single global learning rate is not a fair tuning policy. Each tunable entry
+receives its canonical setting and two prospective single-parameter alternatives
+on all six panel/tier strata at 100k transitions. Actual allocated CPU costs are
+disclosed and bounded, not assumed equal between learners. Exactly matching
+canonical runs may be reused, with their original compute retained in the
+ledger. Tuning maps and seeds
 are disjoint from the final confirmatory set.
 
 The inverse temperature defines the target and is not selected after observing
 held-out control performance.  Exact diagnostic maps use a predeclared
-sensitivity grid; the headline GridWorld target freezes one value on seed-zero
-development maps.  The current development value is \(\beta=64\).  Any
-additional value is reported as target sensitivity with appropriate
-approximation and cost diagnostics, not as a best-of-grid result.
+sensitivity grid; the headline GridWorld target freezes one value on map-zero
+development data. The prospective pure-inference screen contrasts \(\beta=64\)
+with \(\beta=16\), or changes policy batch size from 32 to 8 without changing
+temperature. Initialized inference contrasts guide fractions 0.5 and 0.75,
+or the same batch-size change. One configuration per entry is selected over
+equally weighted tier/panel normalized return gaps, not one winner per maze.
+Every configuration gets the same 2,048-table terminal readout before selection.
+This is a bounded target/configuration choice on development data, never a
+best-of-grid choice using protected performance.
 
 All interactions used by PPO guide training, variational refinement, SMC,
 policy-bank evaluation, and sample-average MCMC count toward the proposed method.  Exact policy-value
@@ -180,14 +211,22 @@ control starts from scratch, rather than resuming the guide optimizer.
 
 \DocSubsection{Cost-effective execution order}
 
-After the claim-specific checks in Section~\ref{sec:validation}, one seed and
-the smallest budget run for every method on each map family.  Only finite, semantically valid
-runs advance to a three-seed timing and learning pilot.  That pilot estimates
-resource requests and identifies clearly dominated settings.  Hyperparameters
-are then tuned on designated development instances.  Finally, one frozen
-manifest launches the full seed-by-map comparison.  Job arrays are capped to
-avoid simultaneous infrastructure failures, and each completed run writes a
-validated marker so interrupted arrays can resume without overwriting results.
+After the claim-specific checks in Section~\ref{sec:validation}, small
+technical runs verify every learner's artifacts, budgets, and environment
+semantics. A paired budget-response check informs resource requests without
+dropping weak methods. The bounded 100k screen precedes 200k validation on
+two fresh base geometries per tier, two independent training seeds per geometry,
+and both terrain panels, retaining every declared competitor and control.
+The two panels share geometry and seed blocks; they do not double independent
+map replication. Configuration rankings may change between 100k and 200k.
+
+Only after this validation are the inference engine, confirmatory size, cap,
+analysis, and exclusions frozen before protected outcomes. Running jobs are
+limited to two, at most one SAC job, using separate serial lanes. Independent
+numeric and scheduler checks precede phase expansion. Technical failures halt
+expansion; low returns do not justify excluding a method or layout. All attempts
+are preserved, and a retry requires an explicit new artifact identity rather
+than overwriting completed or partial results.
 
 The same order applies to domain extension: one exact Blackjack instance, one
 seed per method, then three-seed timing, and only then a complete table.
@@ -195,8 +234,13 @@ Tireworld work begins only after the GridWorld confirmatory manifest is frozen.
 
 \DocSubsection{Current empirical status}
 
-The confirmatory study remains incomplete. All numerical results below are
-development diagnostics; held-out maps have not supplied tuning decisions.
+The redesigned terrain confirmatory study remains incomplete; no pilot score
+is a final result. The numerical material below records HISTORICAL development
+diagnostics from the earlier larger-grid study (8, 16, and 32 cells per side).
+Those maps, budgets, and seed cohorts are different from the current 3/5/8
+terrain design. They are retained for methodological context, not pooled into
+its primary tables or used as protected evidence. Final results in the thesis
+and compact paper will use the same complete independently verified data.
 
 \DocSubsubsection{Variational allocation and full-budget controls}
 

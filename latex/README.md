@@ -19,10 +19,13 @@ This directory contains two narratives for the same scientific study:
 
 ## Build
 
-Current versioned source bundle:
+Historical reviewed source bundle (before the3/5/8 terrain redesign):
 `../output/expected-return-policy-inference-overleaf-draft-20261002.zip`.
-Clean-source rebuilds passed for the5-page paper and77-page thesis, matching
-the reviewed PDF text. Older unversioned exported ZIP/PDF files are historical.
+The latest source now describes3/5/8 grids, all seven terrain types, native
+execution, a bounded100k parameter screen and200k fresh-map validation with
+2048-table terminal selection readouts. It requires the newly reviewed terrain
+draft PDFs/bundle; the older bundle does not describe this redesigned study.
+Older unversioned exported ZIP/PDF files are historical.
 See`../docs/current_draft_bundle_2026-10-02.md`. Neither output is a finished
 submission: final empirical results and deposit/venue metadata remain pending.
 
@@ -64,7 +67,8 @@ bibliography style against the current graduate-school instructions.
 
 Both manuscripts define `exp(beta * expected return)` before choosing an
 approximation and acknowledge prior Gibbs policy search. The practical candidate
-is PPO-initialized direct variational policy inference: a factorized distribution
+has pure and PPO-initialized direct variational policy-inference variants:
+a factorized distribution
 over complete stationary tables, a linear return-score gradient, and exact
 policy-space entropy. K=1 is a valid unbiased gradient setting, not an exact
 exponential weight. Family and optimization error remain explicit limitations.
@@ -73,8 +77,9 @@ Policy commitment and native action resampling are both reported.
 The paper now contains theory, exact correctness examples, and the evaluation
 design, **not preliminary GridWorld results or development result includes**.
 Its result section explicitly awaits the complete replicated held-out study.
-The thesis retains the detailed gradient proof, clearly labeled development
-results and failed SMC/MCMC diagnostics. Both will use the same verified final
+The thesis retains the detailed gradient proof, clearly labeled HISTORICAL
+larger-grid development results and failed SMC/MCMC diagnostics. They are not
+pooled with the redesigned terrain study. Both will use the same verified final
 numerical assets after confirmation; they need not share pilot material or
 identical prose. The source snapshot before this separation is preserved in
 `../output/source-archive/latex-before-paper-separation-20261002.zip`. See
