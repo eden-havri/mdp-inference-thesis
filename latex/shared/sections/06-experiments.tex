@@ -21,8 +21,13 @@ are 0.90, 0.85, and 0.80, with equal left/right slip; horizons are 20, 40, and 8
 Frozen-map audits record reachability, shortest-path length and count, and
 single-cell start--goal bottlenecks. Map zero is used for development calibration;
 maps one and two are reserved for fresh-map validation after configuration
-selection. Protected layouts remain unmaterialized until the final study is
-frozen. Small diagnostic instances retain exact enumeration;
+selection. The confirmatory scientific design was frozen before generating
+ten fresh base geometries per tier. Each base is paired with its meadow
+representation and three fresh training blocks, yielding 30 independent base
+geometries and 90 paired geometry/training blocks. Maps are accepted only for
+the declared terrain counts, safe connectivity, and absence of prior or new
+spatial duplicates, never according to any policy's performance. Small
+diagnostic instances retain exact enumeration;
 larger instances retain exact dynamic-programming evaluation of any fixed
 policy even when enumerating all policies is impossible.
 
@@ -227,6 +232,28 @@ numeric and scheduler checks precede phase expansion. Technical failures halt
 expansion; low returns do not justify excluding a method or layout. All attempts
 are preserved, and a retry requires an explicit new artifact identity rather
 than overwriting completed or partial results.
+
+The frozen main engine is PPO-initialized variational inference; pure inference
+and the full-budget assisted PPO control remain in the comparison. Every
+learned run receives the same 200k total active-interaction ceiling and a
+2,048-table terminal readout. A separate 4,096-episode native deployment
+evaluation records actual returns, goal arrival, swamp termination, and timeout.
+Random, return-optimal and goal-optimal controls are evaluated once per
+map/panel, not duplicated for every training seed. Sampling and independent
+scalar replay run on compute nodes; their actual interactions and allocated
+CPU costs are kept separate from learning costs.
+
+The primary report preserves original expected returns for each of the six
+tier/panel strata, averaging training blocks within maps and maps equally.
+The secondary composite gives equal weight to those six strata after
+normalization between each map's random and return-oracle anchors; lower gap
+is better. Degenerate anchor gaps retain raw results and undefined normalized
+values, without clipping or redrawing. Joint hierarchical bootstrap resamples
+base geometries, then paired training blocks, together across methods and
+panels (10,000 draws, seed 0). Its 95\% intervals are descriptive and marginal,
+not simultaneous tests or proof of equivalence. Episode-tail figures use the
+predeclared medium/navigation and hard/meadow categories and aggregate all
+their maps and training runs, rather than selecting attractive instances.
 
 The same order applies to domain extension: one exact Blackjack instance, one
 seed per method, then three-seed timing, and only then a complete table.
